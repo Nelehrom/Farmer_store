@@ -1,0 +1,67 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Dashboard</h1>
+
+<div class="row g-4">
+  <div class="col-md-3">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h6 class="text-muted">Активные заказы</h6>
+        <h3>0</h3>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h6 class="text-muted">Просроченные партии</h6>
+        <h3>0</h3>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h6 class="text-muted">Скоро истекают</h6>
+        <h3>0</h3>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h6 class="text-muted">Товаров на складе</h6>
+        <h3>0</h3>
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr class="my-4">
+
+<h4>Последние заказы</h4>
+<table class="table table-hover mt-3">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Дата</th>
+      <th>Клиент</th>
+      <th>Сумма</th>
+      <th>Статус</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td colspan="5" class="text-muted text-center">
+        Заказов пока нет
+      </td>
+    </tr>
+  </tbody>
+</table>
+{% endblock %}

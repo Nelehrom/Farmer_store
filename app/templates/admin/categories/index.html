@@ -1,0 +1,49 @@
+{% extends "admin/base.html" %}
+{% block title %}Категории{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="mb-0">Категории</h1>
+  <a class="btn btn-primary" href="{{ url_for('admin.category_create') }}">+ Добавить категорию</a>
+</div>
+
+<div class="row g-3">
+  {% if categories %}
+    {% for c in categories %}
+      <div class="col-6 col-md-4 col-lg-3">
+        <div class="card shadow-sm h-100">
+          {% if c.image_url %}
+            <img src="{{ c.image_url }}" class="card-img-top" style="height:160px;object-fit:cover;" alt="img">
+          {% else %}
+            <div class="bg-light d-flex align-items-center justify-content-center" style="height:160px;">
+              <span class="text-muted">без фото</span>
+            </div>
+          {% endif %}
+
+          <div class="card-body">
+            <div class="fw-semibold">{{ c.name }}</div>
+          </div>
+
+          <div class="card-footer bg-white d-flex gap-2">
+            <a class="btn btn-sm btn-outline-secondary flex-fill"
+               href="{{ url_for('admin.category_edit', category_id=c.id) }}">
+              Редакт.
+            </a>
+
+            <form class="flex-fill" method="post"
+                  action="{{ url_for('admin.category_delete', category_id=c.id) }}"
+                  onsubmit="return confirm('Удалить категорию «{{ c.name }}»?');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sm btn-outline-danger w-100" type="submit">Удалить</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="col-12">
+      <div class="text-center text-muted py-4">Категорий пока нет</div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

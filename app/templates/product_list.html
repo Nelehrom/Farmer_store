@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Товары</h2>
+<div style="display: flex; flex-wrap: wrap; gap: 20px;">
+  {% for product in products %}
+    <div style="border: 1px solid #ccc; padding: 10px; width: 300px;">
+      <img src="{{ product.image_url }}" alt="{{ product.name }}" style="width:100%;">
+      <h3>{{ product.name }}</h3>
+      <p>{{ product.description }}</p>
+      <p><strong>{{ product.price }} ₽</strong> {{ "за кг" if product.is_weight_based else "за шт" }}</p>
+      {% if product.is_frozen %}<span>❄️ Заморожено</span>{% endif %}
+      {% if product.is_discounted %}<span style="color:red;">🔥 Скидка</span>{% endif %}
+    </div>
+  {% endfor %}
+</div>
+{% endblock %}

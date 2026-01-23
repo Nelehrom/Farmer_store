@@ -1,0 +1,149 @@
+{% extends "admin/base.html" %}
+{% block title %}Товары{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="mb-0">Товары</h1>
+  <a class="btn btn-primary" href="{{ url_for('admin.product_create') }}">+ Добавить товар</a>
+</div>
+
+<form class="row g-2 mb-3" method="get">
+  <div class="col-md-6">
+    <input
+      type="text"
+      class="form-control"
+      name="q"
+      placeholder="Поиск по названию..."
+      value="{{ q }}"
+    >
+  </div>
+
+  <div class="col-md-4">
+    <select class="form-select" name="category_id">
+      <option value="">Все категории</option>
+      {% for c in categories %}
+        <option value="{{ c.id }}" {% if category_id and category_id|int == c.id %}selected{% endif %}>
+          {{ c.name }}
+        </option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="col-md-1 d-grid">
+    <button class="btn btn-outline-secondary" type="submit">Фильтр</button>
+  </div>
+
+  <div class="col-md-1 d-grid">
+    <a class="btn btn-outline-light border" href="{{ url_for('admin.admin_products') }}">Сброс</a>
+  </div>
+</form>
+
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0 align-middle">
+        <thead class="table-light">
+          <tr>
+            <th style="width: 70px;">ID</th>
+            <th style="width: 80px;">Фото</th>
+            <th>Название</th>
+            <th>Категория</th>
+            <th class="text-end">Цена</th>
+            <th class="text-center">Тип</th>
+            <th class="text-center">Скидка</th>
+            <th class="text-end" style="width: 260px;">Действия</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {% if products %}
+            {% for p in products %}
+              <tr>
+                <td>{{ p.id }}</td>
+
+                <td>
+                  {% if p.image_url %}
+                    <img src="{{ p.image_url }}" alt="img" class="rounded" style="width:56px;height:56px;object-fit:cover;">
+                  {% else %}
+                    <div class="text-muted small">—</div>
+                  {% endif %}
+                </td>
+
+                <td>
+                  <div class="fw-semibold">
+                    <a class="text-decoration-none" href="{{ url_for('admin.product_view', product_id=p.id) }}">
+                      {{ p.name }}
+                    </a>
+                  </div>
+                  {% if p.description %}
+                    <div class="text-muted small">
+                      {{ p.description[:80] }}{% if p.description|length > 80 %}…{% endif %}
+                    </div>
+                  {% endif %}
+                </td>
+
+                <td>
+                  {% if p.category %}
+                    {{ p.category.name }}
+                  {% else %}
+                    <span class="text-muted">—</span>
+                  {% endif %}
+                </td>
+
+                <td class="text-end">
+                  {{ "%.2f"|format(p.price|float) }}
+                </td>
+
+                <td class="text-center">
+                  {% if p.is_weight_based %}
+                    <span class="badge text-bg-info">весовой</span>
+                  {% else %}
+                    <span class="badge text-bg-secondary">штучный</span>
+                  {% endif %}
+                </td>
+
+                <td class="text-center">
+                  {% if p.is_discounted %}
+                    <span class="badge text-bg-warning">да</span>
+                  {% else %}
+                    <span class="text-muted">нет</span>
+                  {% endif %}
+                </td>
+
+                <td class="text-end">
+                  <a href="{{ url_for('admin.product_view', product_id=p.id) }}"
+                     class="btn btn-sm btn-outline-primary">
+                    Открыть
+                  </a>
+
+                  <a href="{{ url_for('admin.product_edit', product_id=p.id) }}"
+                     class="btn btn-sm btn-outline-secondary">
+                    Редакт.
+                  </a>
+
+                  <form class="d-inline"
+                        method="post"
+                        action="{{ url_for('admin.product_delete', product_id=p.id) }}"
+                        onsubmit="return confirm('Удалить товар «{{ p.name }}»?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                      Удалить
+                    </button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="8" class="text-center text-muted py-4">
+                Товары не найдены
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

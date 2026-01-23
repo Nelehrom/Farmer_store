@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>Категории товаров</h1>
+<div style="display: flex; gap: 20px; flex-wrap: wrap;">
+  {% for category in categories %}
+    <a href="{{ url_for('main.category_view', category_id=category.id) }}"
+       style="text-decoration: none; color: inherit;">
+      <div style="border-radius: 20px; padding: 20px; background: #f5f5f5;
+                  width: 250px; text-align: center; transition: 0.2s; box-shadow: 0 2px 6px rgba(0,0,0,0.1);">
+        {{ category.name }}
+      </div>
+    </a>
+  {% endfor %}
+</div>
+{% endblock %}

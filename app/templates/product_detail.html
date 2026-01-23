@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<a href="{{ url_for('main.category_view', category_id=product.category_id) }}"
+   style="text-decoration: none; display: inline-block; margin-bottom: 20px;">
+  ← Назад в категорию
+</a>
+
+<div class="product-card" style="max-width: 600px; padding: 20px; border-radius: 16px;
+     background: #f9f9f9; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin: 0 auto;">
+
+  <h2 style="margin-top: 0;">{{ product.name }}</h2>
+
+  {% if product.image_url %}
+    <img src="{{ product.image_url }}" alt="{{ product.name }}"
+         style="width: 100%; max-height: 300px; object-fit: cover; border-radius: 12px; margin-bottom: 16px;">
+  {% endif %}
+
+  <p><strong>Цена:</strong> {{ product.price }} ₽
+    {% if product.is_weight_based %}/ кг{% else %}/ шт{% endif %}
+  </p>
+
+  {% if product.is_frozen %}
+    <p>❄️ <em>Замороженный продукт</em></p>
+  {% endif %}
+
+  {% if product.is_discounted %}
+    <p style="color:red;">🔥 <strong>Скидка!</strong></p>
+  {% endif %}
+
+  <p><strong>Описание:</strong><br>{{ product.description or "Нет описания." }}</p>
+
+  {% if product.details %}
+    <details style="margin: 10px 0;">
+      <summary style="cursor: pointer;">Пищевая ценность / состав</summary>
+      <p>{{ product.details }}</p>
+    </details>
+  {% endif %}
+
+  <p><strong>Поставщик:</strong> {{ product.supplier_name or "Без поставщика" }}</p>
+  <p><strong>Теги:</strong> {{ product.tags or "—" }}</p>
+
+  <div style="margin-top: 20px; display: flex; gap: 10px;">
+    <button>🛒 Забронировать</button>
+    <button>❤️</button>
+  </div>
+
+</div>
+{% endblock %}
