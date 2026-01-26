@@ -1,0 +1,207 @@
+{% extends "admin/base.html" %}
+{% block title %}Поставка{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="mb-0">Поставка</h1>
+  <div class="d-flex gap-2">
+    <form method="post" action="{{ url_for('admin.admin_supply_clear') }}"
+          onsubmit="return confirm('Очистить список поставки?');">
+      {{ csrf_token() }}
+      <button class="btn btn-outline-secondary" type="submit" {% if not lines %}disabled{% endif %}>
+        Очистить
+      </button>
+    </form>
+
+    <form method="post" action="{{ url_for('admin.admin_supply_confirm') }}"
+          onsubmit="return confirm('Подтвердить поставку и добавить на склад?');">
+      {{ csrf_token() }}
+      <button class="btn btn-primary" type="submit" {% if not lines %}disabled{% endif %}>
+        Подтвердить
+      </button>
+    </form>
+  </div>
+</div>
+
+<div class="row g-3">
+  <!-- LEFT -->
+  <div class="col-lg-4">
+    <div class="card shadow-sm mb-3">
+      <div class="card-body">
+        <h6 class="mb-3">Найти товар</h6>
+
+        <form method="get" action="{{ url_for('admin.admin_supply') }}" class="row g-2">
+          <div class="col-12">
+            <input class="form-control" name="q" value="{{ q or '' }}" placeholder="Название товара..." autocomplete="off">
+          </div>
+          <div class="col-12 d-grid">
+            <button class="btn btn-outline-primary" type="submit">Поиск</button>
+          </div>
+        </form>
+
+        {% if q %}
+          <hr class="my-3">
+          <div class="small text-muted mb-2">Результаты по запросу: <b>{{ q }}</b></div>
+
+          {% if products %}
+            <div class="list-group">
+              {% for p in products %}
+                <button type="button"
+                        class="list-group-item list-group-item-action"
+                        onclick="fillProduct({{ p.id }}, {{ p.is_weight_based|tojson }}, {{ p.shelf_life_days }}, {{ p.name|tojson }})">
+                  <div class="fw-semibold">{{ p.name }}</div>
+                  <div class="small text-muted">
+                    {% if p.category %}{{ p.category.name }} · {% endif %}
+                    {% if p.is_weight_based %}весовой{% else %}штучный{% endif %}
+                    · срок: {{ p.shelf_life_days }} дн.
+                  </div>
+                </button>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="alert alert-light border mt-3 mb-0">
+              Ничего не найдено.
+              <div class="mt-2">
+                <a class="btn btn-sm btn-primary" href="{{ url_for('admin.product_create') }}">Создать товар</a>
+              </div>
+            </div>
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h6 class="mb-3">Добавить в поставку</h6>
+
+        <form method="post" action="{{ url_for('admin.admin_supply_add') }}" class="row g-2">
+          {{ csrf_token() }}
+
+          <input type="hidden" name="product_id" id="product_id">
+
+          <div class="col-12">
+            <input class="form-control" id="product_name" placeholder="Сначала выбери товар в поиске" disabled>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label mb-1">Количество</label>
+            <div class="input-group">
+              <input class="form-control" name="quantity" id="quantity" placeholder="Напр: 5" required>
+              <span class="input-group-text" id="qty_unit">шт</span>
+            </div>
+            <div class="form-text" id="qty_hint">Для штучного — целое число (например 12).</div>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label mb-1">Дата изготовления</label>
+            <input class="form-control" type="date" name="produced_at" id="produced_at">
+            <div class="form-text">Если оставить пустым — будет сегодня.</div>
+          </div>
+
+          <div class="col-12 d-grid mt-2">
+            <button class="btn btn-success" type="submit">Добавить</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT -->
+  <div class="col-lg-8">
+    <div class="card shadow-sm">
+      <div class="card-body p-0">
+        <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
+          <div>
+            <h6 class="mb-0">Список поставки</h6>
+            <div class="small text-muted">Хранится в session (черновик).</div>
+          </div>
+          <div class="small text-muted">
+            Позиций: <b>{{ lines|length if lines else 0 }}</b>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-hover mb-0 align-middle">
+            <thead class="table-light">
+              <tr>
+                <th style="width:70px;">#</th>
+                <th>Товар</th>
+                <th class="text-end" style="width:160px;">Кол-во</th>
+                <th style="width:170px;">Изготовлено</th>
+                <th class="text-end" style="width:130px;">Действия</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {% if lines %}
+                {% for line in lines %}
+                  {% set p = product_map.get(line.product_id|int) %}
+                  <tr>
+                    <td>{{ loop.index }}</td>
+
+                    <td>
+                      {% if p %}
+                        <div class="fw-semibold">{{ p.name }}</div>
+                        <div class="small text-muted">
+                          {% if p.is_weight_based %}весовой{% else %}штучный{% endif %}
+                          · срок: {{ p.shelf_life_days }} дн.
+                        </div>
+                      {% else %}
+                        <span class="text-muted">Товар удалён?</span>
+                      {% endif %}
+                    </td>
+
+                    <td class="text-end">
+                      <span class="fw-semibold">{{ line.qty }}</span>
+                      <span class="text-muted">
+                        {% if p and p.is_weight_based %}кг{% else %}шт{% endif %}
+                      </span>
+                    </td>
+
+                    <td>{{ line.produced_at }}</td>
+
+                    <td class="text-end">
+                      <form class="d-inline" method="post"
+                            action="{{ url_for('admin.admin_supply_remove', idx=loop.index0) }}"
+                            onsubmit="return confirm('Убрать позицию?');">
+                        {{ csrf_token() }}
+                        <button class="btn btn-sm btn-outline-danger" type="submit">Убрать</button>
+                      </form>
+                    </td>
+                  </tr>
+                {% endfor %}
+              {% else %}
+                <tr>
+                  <td colspan="5" class="text-center text-muted py-4">
+                    Список пуст. Найди товар слева и добавь его в поставку.
+                  </td>
+                </tr>
+              {% endif %}
+            </tbody>
+
+          </table>
+        </div>
+
+        <div class="p-3 border-top">
+          <a class="btn btn-outline-primary" href="{{ url_for('admin.admin_batches') }}">Перейти на склад</a>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function fillProduct(id, isWeight, shelfLife, name) {
+    document.getElementById('product_id').value = id;
+    document.getElementById('product_name').value = name;
+
+    document.getElementById('qty_unit').textContent = isWeight ? 'кг' : 'шт';
+    document.getElementById('qty_hint').textContent = isWeight
+      ? 'Для весового — число в кг (например 2.5).'
+      : 'Для штучного — целое число (например 12).';
+
+    document.getElementById('quantity').focus();
+  }
+</script>
+{% endblock %}

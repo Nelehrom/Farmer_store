@@ -1,19 +1,26 @@
 from functools import wraps
+from datetime import date, timedelta
+from decimal import Decimal
 
-from flask import Blueprint, render_template, redirect, url_for, flash, request, abort
+from flask import (
+    Blueprint, render_template, redirect, url_for, flash,
+    request, abort, session
+)
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from app import db
-from app.forms import RegistrationForm, ProductForm, CategoryForm
-from app.models import User, Product, Category
+from app.forms import (
+    RegistrationForm, ProductForm, CategoryForm,
+    SupplySearchForm, SupplyAddLineForm
+)
+from app.models import User, Product, Category, Batch
 from app.uploads import save_product_image, save_category_image
 
 
 # -----------------------
 # Blueprints
 # -----------------------
-
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 main_bp = Blueprint("main", __name__)
 
@@ -21,7 +28,6 @@ main_bp = Blueprint("main", __name__)
 # -----------------------
 # Decorators
 # -----------------------
-
 def admin_required(view):
     @wraps(view)
     @login_required
@@ -29,14 +35,28 @@ def admin_required(view):
         if not current_user.is_admin:
             abort(403)
         return view(*args, **kwargs)
-
     return wrapped
+
+
+# -----------------------
+# Supply helpers (session draft)
+# -----------------------
+def _supply_lines():
+    # list[dict]: {product_id:int, qty:str, produced_at:str(YYYY-MM-DD)}
+    return session.get("supply_lines", [])
+
+def _save_supply_lines(lines):
+    session["supply_lines"] = lines
+    session.modified = True
+
+def _clear_supply_lines():
+    session.pop("supply_lines", None)
+    session.modified = True
 
 
 # -----------------------
 # Main (public) routes
 # -----------------------
-
 @main_bp.route("/register", methods=["GET", "POST"])
 def register():
     form = RegistrationForm()
@@ -51,13 +71,12 @@ def register():
         db.session.commit()
         flash("Регистрация прошла успешно! Войдите в аккаунт.", "success")
         return redirect(url_for("main.login"))
-
     return render_template("register.html", form=form)
 
 
 @main_bp.route("/login", methods=["GET", "POST"])
 def login():
-    from app.forms import LoginForm  # локально, чтобы не тащить в импорты если не надо
+    from app.forms import LoginForm
     form = LoginForm()
 
     if form.validate_on_submit():
@@ -109,7 +128,6 @@ def category_view(category_id):
 # -----------------------
 # Admin routes
 # -----------------------
-
 @admin_bp.route("/")
 @admin_required
 def dashboard():
@@ -117,7 +135,6 @@ def dashboard():
 
 
 # ---- Products CRUD ----
-
 @admin_bp.route("/products")
 @admin_required
 def admin_products():
@@ -125,10 +142,8 @@ def admin_products():
     category_id = request.args.get("category_id") or ""
 
     query = Product.query
-
     if q:
         query = query.filter(Product.name.ilike(f"%{q}%"))
-
     if category_id.isdigit():
         query = query.filter(Product.category_id == int(category_id))
 
@@ -175,7 +190,9 @@ def product_create():
             supplier_name=form.supplier_name.data,
             tags=form.tags.data,
             category_id=None if form.category_id.data == 0 else form.category_id.data,
-            image_url=image_url or None
+            image_url=image_url or None,
+            # ✅ новое поле
+            shelf_life_days=form.shelf_life_days.data
         )
         db.session.add(product)
         db.session.commit()
@@ -215,6 +232,8 @@ def product_edit(product_id):
         product.supplier_name = form.supplier_name.data
         product.tags = form.tags.data
         product.category_id = None if form.category_id.data == 0 else form.category_id.data
+        # ✅ новое поле
+        product.shelf_life_days = form.shelf_life_days.data
 
         if form.image.data and getattr(form.image.data, "filename", ""):
             try:
@@ -241,7 +260,6 @@ def product_delete(product_id):
 
 
 # ---- Categories CRUD ----
-
 @admin_bp.route("/categories")
 @admin_required
 def admin_categories():
@@ -323,3 +341,178 @@ def category_delete(category_id):
     db.session.commit()
     flash("Категория удалена", "info")
     return redirect(url_for("admin.admin_categories"))
+
+
+# -----------------------
+# ✅ Supply (Поставка)
+# -----------------------
+@admin_bp.route("/supply", methods=["GET"])
+@admin_required
+def admin_supply():
+    q = (request.args.get("q") or "").strip()
+    products = []
+
+    if q:
+        products = (
+            Product.query
+            .filter(Product.name.ilike(f"%{q}%"))
+            .order_by(Product.name.asc())
+            .limit(25)
+            .all()
+        )
+
+    lines = _supply_lines()
+
+    # подгрузим товары для отображения списка (названия/тип)
+    product_map = {}
+    if lines:
+        ids = [int(x["product_id"]) for x in lines]
+        product_map = {p.id: p for p in Product.query.filter(Product.id.in_(ids)).all()}
+
+    add_form = SupplyAddLineForm()  # для формы "добавить позицию" в карточке товара
+
+    return render_template(
+        "admin/supply/index.html",
+        q=q,
+        products=products,
+        lines=lines,
+        product_map=product_map,
+        add_form=add_form
+    )
+
+
+@admin_bp.route("/supply/add", methods=["POST"])
+@admin_required
+def admin_supply_add():
+    form = SupplyAddLineForm()
+
+    if not form.validate_on_submit():
+        flash("Заполни количество (и дату изготовления при необходимости)", "danger")
+        return redirect(url_for("admin.admin_supply"))
+
+    product = Product.query.get_or_404(form.product_id.data)
+
+    produced_at = form.produced_at.data or date.today()
+    qty = form.quantity.data
+
+    # На всякий: Decimal
+    try:
+        qty = Decimal(str(qty))
+    except Exception:
+        flash("Некорректное количество", "danger")
+        return redirect(url_for("admin.admin_supply"))
+
+    if qty <= 0:
+        flash("Количество должно быть больше 0", "danger")
+        return redirect(url_for("admin.admin_supply"))
+
+    lines = _supply_lines()
+
+    # если уже есть такая же позиция (тот же товар + та же дата изготовления) — просто суммируем
+    key_prod = int(product.id)
+    key_date = produced_at.isoformat()
+
+    merged = False
+    for line in lines:
+        if int(line["product_id"]) == key_prod and line.get("produced_at") == key_date:
+            line["qty"] = str(Decimal(line["qty"]) + qty)
+            merged = True
+            break
+
+    if not merged:
+        lines.append({
+            "product_id": key_prod,
+            "qty": str(qty),
+            "produced_at": key_date
+        })
+
+    _save_supply_lines(lines)
+    flash(f"Добавлено в поставку: {product.name}", "success")
+    return redirect(url_for("admin.admin_supply", q=request.form.get("q", "")))
+
+
+@admin_bp.route("/supply/remove/<int:idx>", methods=["POST"])
+@admin_required
+def admin_supply_remove(idx):
+    lines = _supply_lines()
+    if 0 <= idx < len(lines):
+        lines.pop(idx)
+        _save_supply_lines(lines)
+        flash("Позиция удалена из поставки", "info")
+    return redirect(url_for("admin.admin_supply"))
+
+
+@admin_bp.route("/supply/clear", methods=["POST"])
+@admin_required
+def admin_supply_clear():
+    _clear_supply_lines()
+    flash("Список поставки очищен", "info")
+    return redirect(url_for("admin.admin_supply"))
+
+
+@admin_bp.route("/supply/confirm", methods=["POST"])
+@admin_required
+def admin_supply_confirm():
+    lines = _supply_lines()
+    if not lines:
+        flash("Список поставки пуст", "warning")
+        return redirect(url_for("admin.admin_supply"))
+
+    # создаём партии
+    for line in lines:
+        product = Product.query.get(int(line["product_id"]))
+        if not product:
+            continue
+
+        produced_at = date.fromisoformat(line["produced_at"])
+        expires_at = Batch.calc_expires(produced_at, product.shelf_life_days)
+        qty = Decimal(line["qty"])
+
+        b = Batch(
+            product_id=product.id,
+            quantity=qty,
+            produced_at=produced_at,
+            expires_at=expires_at
+        )
+        db.session.add(b)
+
+    db.session.commit()
+    _clear_supply_lines()
+    flash("Поставка подтверждена: партии добавлены на склад", "success")
+    return redirect(url_for("admin.admin_batches"))
+
+
+# -----------------------
+# ✅ Batches (Склад)
+# -----------------------
+@admin_bp.route("/batches")
+@admin_required
+def admin_batches():
+    status = (request.args.get("status") or "").strip()  # "", "expired", "soon"
+    days = request.args.get("days", "3")
+
+    try:
+        days_int = int(days)
+    except Exception:
+        days_int = 3
+
+    today = date.today()
+    soon_border = today + timedelta(days=days_int)
+
+    query = Batch.query.join(Product).order_by(Batch.expires_at.asc(), Batch.id.desc())
+
+    if status == "expired":
+        query = query.filter(Batch.expires_at < today)
+    elif status == "soon":
+        query = query.filter(Batch.expires_at >= today, Batch.expires_at <= soon_border)
+
+    batches = query.all()
+
+    return render_template(
+        "admin/batches/index.html",
+        batches=batches,
+        status=status,
+        days=days_int,
+        today=today,
+        soon_border=soon_border
+    )
