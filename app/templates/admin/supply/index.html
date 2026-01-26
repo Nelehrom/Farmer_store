@@ -135,7 +135,7 @@
             <tbody>
               {% if lines %}
                 {% for line in lines %}
-                  {% set p = product_map.get(line.product_id|int) %}
+                  {% set p = product_map.get(line["product_id"]|int) %}
                   <tr>
                     <td>{{ loop.index }}</td>
 
@@ -152,13 +152,13 @@
                     </td>
 
                     <td class="text-end">
-                      <span class="fw-semibold">{{ line.qty }}</span>
+                      <span class="fw-semibold">{{ line["qty"] }}</span>
                       <span class="text-muted">
                         {% if p and p.is_weight_based %}кг{% else %}шт{% endif %}
                       </span>
                     </td>
 
-                    <td>{{ line.produced_at }}</td>
+                    <td>{{ line["produced_at"] }}</td>
 
                     <td class="text-end">
                       <form class="d-inline" method="post"
