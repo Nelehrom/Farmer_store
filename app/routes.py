@@ -12,9 +12,11 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from app import db
 from app.forms import (
     RegistrationForm, ProductForm, CategoryForm,
-    SupplySearchForm, SupplyAddLineForm
+    SupplySearchForm, SupplyAddLineForm,
+    SalesAddLineForm, SalesHistoryFilterForm
+
 )
-from app.models import User, Product, Category, Batch, WriteOff
+from app.models import User, Product, Category, Batch, WriteOff, Sale, SaleItem
 from app.uploads import save_product_image, save_category_image
 
 
@@ -51,6 +53,20 @@ def _save_supply_lines(lines):
 
 def _clear_supply_lines():
     session.pop("supply_lines", None)
+    session.modified = True
+
+def _sales_lines():
+    # list[dict]: {product_id:int, qty:str}
+    return session.get("sales_lines", [])
+
+
+def _save_sales_lines(lines):
+    session["sales_lines"] = lines
+    session.modified = True
+
+
+def _clear_sales_lines():
+    session.pop("sales_lines", None)
     session.modified = True
 
 
@@ -566,6 +582,282 @@ def admin_batch_writeoff(batch_id):
 
     flash("Партия списана и сохранена в журнале списаний", "success")
     return redirect(url_for("admin.admin_batches"))
+
+
+# -----------------------
+# ✅ Sales (Продажи)
+# -----------------------
+@admin_bp.route("/sales", methods=["GET"])
+@admin_required
+def admin_sales():
+    q = (request.args.get("q") or "").strip()
+    products = []
+
+    if q:
+        products = (
+            Product.query
+            .filter(Product.name.ilike(f"%{q}%"))
+            .order_by(Product.name.asc())
+            .limit(25)
+            .all()
+        )
+
+    lines = _sales_lines()
+    product_map = {}
+    available_map = {}
+
+    if lines:
+        ids = [int(x["product_id"]) for x in lines]
+        product_map = {p.id: p for p in Product.query.filter(Product.id.in_(ids)).all()}
+
+    today = date.today()
+    all_products = Product.query.all()
+    for product in all_products:
+        available_qty = (
+            db.session.query(db.func.coalesce(db.func.sum(Batch.quantity), 0))
+            .filter(Batch.product_id == product.id, Batch.expires_at >= today)
+            .scalar()
+        )
+        available_map[product.id] = Decimal(str(available_qty or 0))
+
+    add_form = SalesAddLineForm()
+
+    line_total_sum = Decimal("0.00")
+    for line in lines:
+        product = product_map.get(int(line["product_id"]))
+        if not product:
+            continue
+        qty = Decimal(line["qty"])
+        line_total_sum += qty * Decimal(str(product.price))
+
+    return render_template(
+        "admin/sales/index.html",
+        q=q,
+        products=products,
+        lines=lines,
+        product_map=product_map,
+        available_map=available_map,
+        add_form=add_form,
+        line_total_sum=line_total_sum
+    )
+
+
+@admin_bp.route("/sales/add", methods=["POST"])
+@admin_required
+def admin_sales_add():
+    form = SalesAddLineForm()
+
+    if not request.form.get("product_id"):
+        flash("Сначала выбери товар в поиске", "warning")
+        return redirect(url_for("admin.admin_sales", q=request.form.get("q", "")))
+
+    if not form.validate_on_submit():
+        flash("Заполни корректное количество", "danger")
+        return redirect(url_for("admin.admin_sales"))
+
+    product = Product.query.get_or_404(form.product_id.data)
+
+    try:
+        qty = Decimal(str(form.quantity.data))
+    except Exception:
+        flash("Некорректное количество", "danger")
+        return redirect(url_for("admin.admin_sales"))
+
+    if qty <= 0:
+        flash("Количество должно быть больше 0", "danger")
+        return redirect(url_for("admin.admin_sales"))
+
+    lines = _sales_lines()
+    key_prod = int(product.id)
+
+    merged = False
+    for line in lines:
+        if int(line["product_id"]) == key_prod:
+            line["qty"] = str(Decimal(line["qty"]) + qty)
+            merged = True
+            break
+
+    if not merged:
+        lines.append({
+            "product_id": key_prod,
+            "qty": str(qty)
+        })
+
+    _save_sales_lines(lines)
+    flash(f"Добавлено в продажу: {product.name}", "success")
+    return redirect(url_for("admin.admin_sales", q=request.form.get("q", "")))
+
+
+@admin_bp.route("/sales/remove/<int:idx>", methods=["POST"])
+@admin_required
+def admin_sales_remove(idx):
+    lines = _sales_lines()
+    if 0 <= idx < len(lines):
+        lines.pop(idx)
+        _save_sales_lines(lines)
+        flash("Позиция удалена из продажи", "info")
+    return redirect(url_for("admin.admin_sales"))
+
+
+@admin_bp.route("/sales/clear", methods=["POST"])
+@admin_required
+def admin_sales_clear():
+    _clear_sales_lines()
+    flash("Список продажи очищен", "info")
+    return redirect(url_for("admin.admin_sales"))
+
+
+@admin_bp.route("/sales/confirm", methods=["POST"])
+@admin_required
+def admin_sales_confirm():
+    lines = _sales_lines()
+    if not lines:
+        flash("Список продажи пуст", "warning")
+        return redirect(url_for("admin.admin_sales"))
+
+    today = date.today()
+    sale = Sale()
+    db.session.add(sale)
+
+    for line in lines:
+        product = Product.query.get(int(line["product_id"]))
+        if not product:
+            continue
+
+        need_qty = Decimal(line["qty"])
+        if need_qty <= 0:
+            continue
+
+        batches = (
+            Batch.query
+            .filter(Batch.product_id == product.id, Batch.expires_at >= today)
+            .order_by(Batch.produced_at.asc(), Batch.id.asc())
+            .all()
+        )
+
+        available_qty = sum((Decimal(str(b.quantity)) for b in batches), Decimal("0"))
+        if available_qty < need_qty:
+            db.session.rollback()
+            flash(f"Недостаточно остатков для товара '{product.name}'. Доступно: {available_qty}", "danger")
+            return redirect(url_for("admin.admin_sales"))
+
+        remains = need_qty
+        source_produced_at = batches[0].produced_at if batches else None
+
+        for batch in batches:
+            if remains <= 0:
+                break
+
+            batch_qty = Decimal(str(batch.quantity))
+            take_qty = batch_qty if batch_qty <= remains else remains
+
+            remains -= take_qty
+            new_qty = batch_qty - take_qty
+
+            if new_qty <= 0:
+                db.session.delete(batch)
+            else:
+                batch.quantity = new_qty
+
+        unit_price = Decimal(str(product.price))
+        line_total = (unit_price * need_qty).quantize(Decimal("0.01"))
+
+        item = SaleItem(
+            sale=sale,
+            product_id=product.id,
+            quantity=need_qty,
+            unit_price=unit_price,
+            line_total=line_total,
+            source_produced_at=source_produced_at
+        )
+        db.session.add(item)
+
+    if not sale.items:
+        db.session.rollback()
+        flash("Не удалось сформировать продажу", "danger")
+        return redirect(url_for("admin.admin_sales"))
+
+    db.session.commit()
+    _clear_sales_lines()
+    flash(f"Продажа №{sale.id} подтверждена", "success")
+    return redirect(url_for("admin.admin_sales_history"))
+
+
+@admin_bp.route("/sales/history", methods=["GET"])
+@admin_required
+def admin_sales_history():
+    period = (request.args.get("period") or "").strip()
+    start_date_raw = (request.args.get("start_date") or "").strip()
+    end_date_raw = (request.args.get("end_date") or "").strip()
+    product_id_raw = (request.args.get("product_id") or "").strip()
+
+    filter_form = SalesHistoryFilterForm(request.args)
+
+    product_choices = [(0, "— Все товары —")] + [
+        (p.id, p.name) for p in Product.query.order_by(Product.name.asc()).all()
+    ]
+    filter_form.product_id.choices = product_choices
+
+    selected_product_id = int(product_id_raw) if product_id_raw.isdigit() else 0
+    filter_form.product_id.data = selected_product_id
+
+    start_date = None
+    end_date = None
+    today = date.today()
+
+    if period == "today":
+        start_date = today
+        end_date = today
+    elif period == "yesterday":
+        start_date = today - timedelta(days=1)
+        end_date = start_date
+    elif period == "week":
+        start_date = today - timedelta(days=6)
+        end_date = today
+    elif period == "month":
+        start_date = today - timedelta(days=29)
+        end_date = today
+    elif period == "custom":
+        try:
+            start_date = date.fromisoformat(start_date_raw) if start_date_raw else None
+        except ValueError:
+            start_date = None
+        try:
+            end_date = date.fromisoformat(end_date_raw) if end_date_raw else None
+        except ValueError:
+            end_date = None
+
+    query = SaleItem.query.join(Sale).join(Product)
+
+    if start_date:
+        query = query.filter(db.func.date(Sale.created_at) >= start_date)
+    if end_date:
+        query = query.filter(db.func.date(Sale.created_at) <= end_date)
+
+    if selected_product_id:
+        query = query.filter(SaleItem.product_id == selected_product_id)
+
+    items = query.order_by(Sale.created_at.desc(), SaleItem.id.desc()).all()
+
+    total_sum = sum((Decimal(str(item.line_total)) for item in items), Decimal("0.00"))
+
+    for item in items:
+        qty = Decimal(str(item.quantity))
+        if item.product.is_weight_based:
+            item._qty_display = format(qty.normalize(), "f").rstrip("0").rstrip(".")
+        else:
+            item._qty_display = str(int(qty))
+
+    return render_template(
+        "admin/sales/history.html",
+        items=items,
+        total_sum=total_sum,
+        period=period,
+        start_date=start_date_raw,
+        end_date=end_date_raw,
+        selected_product_id=selected_product_id,
+        filter_form=filter_form
+    )
 
 
 @admin_bp.route("/writeoffs")

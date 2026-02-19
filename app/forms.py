@@ -96,3 +96,35 @@ class SupplyAddLineForm(FlaskForm):
     )
 
     submit = SubmitField("Добавить в поставку")
+
+class SalesAddLineForm(FlaskForm):
+    product_id = IntegerField(validators=[DataRequired()])
+
+    quantity = DecimalField(
+        "Количество",
+        places=3,
+        validators=[DataRequired(), NumberRange(min=0.001)]
+    )
+
+    submit = SubmitField("Добавить в продажу")
+
+
+class SalesHistoryFilterForm(FlaskForm):
+    period = SelectField(
+        "Период",
+        choices=[
+            ("", "— За всё время —"),
+            ("today", "За сегодня"),
+            ("yesterday", "За вчера"),
+            ("week", "За последнюю неделю"),
+            ("month", "За последний месяц"),
+            ("custom", "Свой интервал")
+        ],
+        validators=[Optional()]
+    )
+
+    start_date = DateField("Дата с", validators=[Optional()])
+    end_date = DateField("Дата по", validators=[Optional()])
+    product_id = SelectField("Товар", coerce=int, validators=[Optional()])
+
+    submit = SubmitField("Применить")
