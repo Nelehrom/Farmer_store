@@ -7,7 +7,7 @@
   <div class="d-flex gap-2">
     <form method="post" action="{{ url_for('admin.admin_supply_clear') }}"
           onsubmit="return confirm('Очистить список поставки?');">
-      {{ csrf_token() }}
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button class="btn btn-outline-secondary" type="submit" {% if not lines %}disabled{% endif %}>
         Очистить
       </button>
@@ -15,7 +15,7 @@
 
     <form method="post" action="{{ url_for('admin.admin_supply_confirm') }}"
           onsubmit="return confirm('Подтвердить поставку и добавить на склад?');">
-      {{ csrf_token() }}
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button class="btn btn-primary" type="submit" {% if not lines %}disabled{% endif %}>
         Подтвердить
       </button>
@@ -47,8 +47,10 @@
             <div class="list-group">
               {% for p in products %}
                 <button type="button"
-                        class="list-group-item list-group-item-action"
-                        onclick="fillProduct({{ p.id }}, {{ p.is_weight_based|tojson }}, {{ p.shelf_life_days }}, {{ p.name|tojson }})">
+                         class="list-group-item list-group-item-action js-product-pick"
+                        data-product-id="{{ p.id }}"
+                        data-product-name="{{ p.name|e }}"
+                        data-is-weight="{{ 1 if p.is_weight_based else 0 }}">
                   <div class="fw-semibold">{{ p.name }}</div>
                   <div class="small text-muted">
                     {% if p.category %}{{ p.category.name }} · {% endif %}
@@ -75,12 +77,18 @@
         <h6 class="mb-3">Добавить в поставку</h6>
 
         <form method="post" action="{{ url_for('admin.admin_supply_add') }}" class="row g-2">
-          {{ csrf_token() }}
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
           <input type="hidden" name="product_id" id="product_id">
 
           <div class="col-12">
             <input class="form-control" id="product_name" placeholder="Сначала выбери товар в поиске" disabled>
+          </div>
+
+          <div class="col-12 d-none" id="select_product_warning_wrap">
+            <div class="alert alert-warning py-2 mb-0" id="select_product_warning">
+              Сначала выбери товар в поиске.
+            </div>
           </div>
 
           <div class="col-12">
@@ -99,7 +107,7 @@
           </div>
 
           <div class="col-12 d-grid mt-2">
-            <button class="btn btn-success" type="submit">Добавить</button>
+            <button class="btn btn-success" type="submit" id="add_supply_btn" disabled>Добавить</button>
           </div>
         </form>
       </div>
@@ -164,7 +172,7 @@
                       <form class="d-inline" method="post"
                             action="{{ url_for('admin.admin_supply_remove', idx=loop.index0) }}"
                             onsubmit="return confirm('Убрать позицию?');">
-                        {{ csrf_token() }}
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button class="btn btn-sm btn-outline-danger" type="submit">Убрать</button>
                       </form>
                     </td>
@@ -192,9 +200,28 @@
 </div>
 
 <script>
+  const productIdEl = document.getElementById('product_id');
+  const productNameEl = document.getElementById('product_name');
+  const quantityEl = document.getElementById('quantity');
+  const addBtnEl = document.getElementById('add_supply_btn');
+  const addFormEl = addBtnEl?.closest('form');
+  const selectWarningWrapEl = document.getElementById('select_product_warning_wrap');
+  const productPickButtons = document.querySelectorAll('.js-product-pick');
+
+  function updateAddButtonState() {
+    const hasProduct = Boolean(productIdEl.value);
+    addBtnEl.disabled = !hasProduct;
+
+    if (hasProduct) {
+      selectWarningWrapEl.classList.add('d-none');
+    }
+  }
+
   function fillProduct(id, isWeight, shelfLife, name) {
     document.getElementById('product_id').value = id;
     document.getElementById('product_name').value = name;
+    productIdEl.value = id;
+    productNameEl.value = name;
 
     document.getElementById('qty_unit').textContent = isWeight ? 'кг' : 'шт';
     document.getElementById('qty_hint').textContent = isWeight
@@ -202,6 +229,31 @@
       : 'Для штучного — целое число (например 12).';
 
     document.getElementById('quantity').focus();
+    updateAddButtonState();
+    quantityEl.focus();
   }
+
+  productPickButtons.forEach(function (button) {
+    button.addEventListener('click', function () {
+      fillProduct(
+        this.dataset.productId,
+        this.dataset.isWeight === '1',
+        null,
+        this.dataset.productName
+      );
+    });
+  });
+
+  addFormEl.addEventListener('submit', function (e) {
+    if (productIdEl.value) {
+      return;
+    }
+
+    e.preventDefault();
+    selectWarningWrapEl.classList.remove('d-none');
+  });
+
+  updateAddButtonState();
+
 </script>
 {% endblock %}

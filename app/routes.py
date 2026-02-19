@@ -386,6 +386,10 @@ def admin_supply():
 def admin_supply_add():
     form = SupplyAddLineForm()
 
+    if not request.form.get("product_id"):
+        flash("Сначала выбери товар в поиске", "warning")
+        return redirect(url_for("admin.admin_supply", q=request.form.get("q", "")))
+
     if not form.validate_on_submit():
         flash("Заполни количество (и дату изготовления при необходимости)", "danger")
         return redirect(url_for("admin.admin_supply"))
