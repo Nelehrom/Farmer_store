@@ -1,0 +1,45 @@
+{% extends "admin/base.html" %}
+{% block title %}Списания{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="mb-0">Списания за последние 30 дней</h1>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0 align-middle">
+        <thead class="table-light">
+          <tr>
+            <th style="width:80px;">ID</th>
+            <th>Товар</th>
+            <th style="width:140px;" class="text-end">Количество</th>
+            <th>Причина</th>
+            <th style="width:180px;">Дата</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if writeoffs %}
+            {% for row in writeoffs %}
+              <tr>
+                <td>{{ row.id }}</td>
+                <td>{{ row.product.name }}</td>
+                <td class="text-end">
+                  {{ row._qty_display }} {{ "кг" if row.product.is_weight_based else "шт" }}
+                </td>
+                <td>{{ row.reason }}</td>
+                <td class="text-muted small">{{ row.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="5" class="text-center text-muted py-4">Списаний за последний месяц нет</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

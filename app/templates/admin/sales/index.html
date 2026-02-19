@@ -1,0 +1,210 @@
+{% extends "admin/base.html" %}
+{% block title %}Продажи{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="mb-0">Продажи</h1>
+  <div class="d-flex gap-2">
+    <form method="post" action="{{ url_for('admin.admin_sales_clear') }}"
+          onsubmit="return confirm('Очистить список продажи?');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-outline-secondary" type="submit" {% if not lines %}disabled{% endif %}>
+        Очистить
+      </button>
+    </form>
+
+    <form method="post" action="{{ url_for('admin.admin_sales_confirm') }}"
+          onsubmit="return confirm('Подтвердить продажу и списать остатки?');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-primary" type="submit" {% if not lines %}disabled{% endif %}>
+        Подтвердить
+      </button>
+    </form>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-4">
+    <div class="card shadow-sm mb-3">
+      <div class="card-body">
+        <h6 class="mb-3">Найти товар</h6>
+
+        <form method="get" action="{{ url_for('admin.admin_sales') }}" class="row g-2">
+          <div class="col-12">
+            <input class="form-control" name="q" value="{{ q or '' }}" placeholder="Название товара..." autocomplete="off">
+          </div>
+          <div class="col-12 d-grid">
+            <button class="btn btn-outline-primary" type="submit">Поиск</button>
+          </div>
+        </form>
+
+        {% if q %}
+          <hr class="my-3">
+          <div class="small text-muted mb-2">Результаты по запросу: <b>{{ q }}</b></div>
+
+          {% if products %}
+            <div class="list-group">
+              {% for p in products %}
+                <button type="button"
+                        class="list-group-item list-group-item-action js-product-pick"
+                        data-product-id="{{ p.id }}"
+                        data-product-name="{{ p.name|e }}"
+                        data-product-price="{{ p.price }}"
+                        data-is-weight="{{ 1 if p.is_weight_based else 0 }}">
+                  <div class="fw-semibold">{{ p.name }}</div>
+                  <div class="small text-muted">
+                    {% if p.is_weight_based %}весовой{% else %}штучный{% endif %}
+                    · цена: {{ p.price }} ₽
+                  </div>
+                </button>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="alert alert-light border mt-3 mb-0">Ничего не найдено.</div>
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h6 class="mb-3">Добавить в продажу</h6>
+
+        <form method="post" action="{{ url_for('admin.admin_sales_add') }}" class="row g-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="product_id" id="product_id">
+
+          <div class="col-12">
+            <input class="form-control" id="product_name" placeholder="Сначала выбери товар" disabled>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label mb-1">Количество</label>
+            <div class="input-group">
+              <input class="form-control" name="quantity" id="quantity" placeholder="Напр: 2.5" required>
+              <span class="input-group-text" id="qty_unit">шт</span>
+            </div>
+          </div>
+
+          <div class="col-12">
+            <div class="small text-muted">Цена за единицу: <b id="unit_price">—</b></div>
+            <div class="small text-muted">Доступный остаток (без просрока): <b id="available_qty">—</b></div>
+          </div>
+
+          <div class="col-12 d-grid mt-2">
+            <button class="btn btn-success" type="submit" id="add_sales_btn" disabled>Добавить</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-8">
+    <div class="card shadow-sm">
+      <div class="card-body p-0">
+        <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
+          <div>
+            <h6 class="mb-0">Список продажи</h6>
+            <div class="small text-muted">Списание со склада произойдёт при подтверждении.</div>
+          </div>
+          <div class="small text-muted">Позиций: <b>{{ lines|length if lines else 0 }}</b></div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-hover mb-0 align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>#</th>
+                <th>Товар</th>
+                <th class="text-end">Кол-во</th>
+                <th class="text-end">Цена</th>
+                <th class="text-end">Сумма</th>
+                <th class="text-end">Действия</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% if lines %}
+                {% for line in lines %}
+                  {% set p = product_map.get(line["product_id"]|int) %}
+                  {% if p %}
+                    {% set qty_num = line["qty"]|float %}
+                    {% set line_sum = qty_num * (p.price|float) %}
+                  {% endif %}
+                  <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>
+                      {% if p %}
+                        <div class="fw-semibold">{{ p.name }}</div>
+                        <div class="small text-muted">Остаток: {{ available_map.get(p.id, 0) }}</div>
+                      {% else %}
+                        <span class="text-muted">Товар удалён?</span>
+                      {% endif %}
+                    </td>
+                    <td class="text-end">
+                      {{ line["qty"] }} {% if p and p.is_weight_based %}кг{% else %}шт{% endif %}
+                    </td>
+                    <td class="text-end">{% if p %}{{ p.price }} ₽{% else %}—{% endif %}</td>
+                    <td class="text-end">{% if p %}{{ "%.2f"|format(line_sum) }} ₽{% else %}—{% endif %}</td>
+                    <td class="text-end">
+                      <form class="d-inline" method="post" action="{{ url_for('admin.admin_sales_remove', idx=loop.index0) }}"
+                            onsubmit="return confirm('Убрать позицию?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-sm btn-outline-danger" type="submit">Убрать</button>
+                      </form>
+                    </td>
+                  </tr>
+                {% endfor %}
+              {% else %}
+                <tr>
+                  <td colspan="6" class="text-center text-muted py-4">Список пуст.</td>
+                </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="p-3 border-top d-flex justify-content-between align-items-center">
+          <a class="btn btn-outline-primary" href="{{ url_for('admin.admin_sales_history') }}">Открыть историю продаж</a>
+          <div class="fs-5">Итого: <b>{{ "%.2f"|format(line_total_sum|float) }} ₽</b></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const productIdEl = document.getElementById('product_id');
+  const productNameEl = document.getElementById('product_name');
+  const addBtnEl = document.getElementById('add_sales_btn');
+  const qtyUnitEl = document.getElementById('qty_unit');
+  const unitPriceEl = document.getElementById('unit_price');
+  const availableQtyEl = document.getElementById('available_qty');
+
+  const availableMap = {
+    {% for pid, qty in available_map.items() %}
+      "{{ pid }}": "{{ qty }}",
+    {% endfor %}
+  };
+
+  function fillProduct(id, isWeight, name, price) {
+    productIdEl.value = id;
+    productNameEl.value = name;
+    qtyUnitEl.textContent = isWeight ? 'кг' : 'шт';
+    unitPriceEl.textContent = `${price} ₽`;
+    availableQtyEl.textContent = availableMap[id] || '0';
+    addBtnEl.disabled = false;
+  }
+
+  document.querySelectorAll('.js-product-pick').forEach((button) => {
+    button.addEventListener('click', function () {
+      fillProduct(
+        this.dataset.productId,
+        this.dataset.isWeight === '1',
+        this.dataset.productName,
+        this.dataset.productPrice
+      );
+      document.getElementById('quantity').focus();
+    });
+  });
+</script>
+{% endblock %}
