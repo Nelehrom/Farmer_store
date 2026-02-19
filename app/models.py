@@ -77,3 +77,19 @@ class Batch(db.Model):
     @staticmethod
     def calc_expires(produced_at: date, shelf_life_days: int) -> date:
         return produced_at + timedelta(days=int(shelf_life_days))
+
+
+
+class WriteOff(db.Model):
+    __tablename__ = "write_offs"
+
+    id = db.Column(db.Integer, primary_key=True)
+    product_id = db.Column(db.Integer, db.ForeignKey("products.id"), nullable=False, index=True)
+    product = db.relationship("Product", backref=db.backref("write_offs", lazy=True))
+
+    quantity = db.Column(db.Numeric(10, 3), nullable=False)
+    reason = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False, index=True)
+
+    def __repr__(self):
+        return f"<WriteOff {self.id} product={self.product_id} qty={self.quantity}>"

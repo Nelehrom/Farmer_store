@@ -14,7 +14,7 @@ from app.forms import (
     RegistrationForm, ProductForm, CategoryForm,
     SupplySearchForm, SupplyAddLineForm
 )
-from app.models import User, Product, Category, Batch
+from app.models import User, Product, Category, Batch, WriteOff
 from app.uploads import save_product_image, save_category_image
 
 
@@ -492,7 +492,8 @@ def admin_supply_confirm():
 @admin_bp.route("/batches")
 @admin_required
 def admin_batches():
-    status = (request.args.get("status") or "").strip()  # "", "expired", "soon"
+    q = (request.args.get("q") or "").strip()
+    status = (request.args.get("status") or "").strip()  # "", "active", "expiring", "expired"
     days = request.args.get("days", "3")
 
     try:
@@ -503,14 +504,35 @@ def admin_batches():
     today = date.today()
     soon_border = today + timedelta(days=days_int)
 
-    query = Batch.query.join(Product).order_by(Batch.expires_at.asc(), Batch.id.desc())
+    query = Batch.query.join(Product)
+
+    if q:
+        query = query.filter(Product.name.ilike(f"%{q}%"))
+
 
     if status == "expired":
         query = query.filter(Batch.expires_at < today)
-    elif status == "soon":
+    elif status == "expiring":
         query = query.filter(Batch.expires_at >= today, Batch.expires_at <= soon_border)
+    elif status == "active":
+        query = query.filter(Batch.expires_at > soon_border)
 
-    batches = query.all()
+    batches = query.order_by(Batch.expires_at.asc(), Batch.id.desc()).all()
+
+    for batch in batches:
+        if batch.expires_at < today:
+            batch._status = "expired"
+        elif batch.expires_at <= soon_border:
+            batch._status = "expiring"
+        else:
+            batch._status = "active"
+
+        qty = Decimal(str(batch.quantity))
+        if batch.product.is_weight_based:
+            batch._qty_display = format(qty.normalize(), "f").rstrip("0").rstrip(".")
+        else:
+            batch._qty_display = str(int(qty))
+
 
     return render_template(
         "admin/batches/index.html",
@@ -520,3 +542,49 @@ def admin_batches():
         today=today,
         soon_border=soon_border
     )
+
+
+@admin_bp.route("/batches/<int:batch_id>/writeoff", methods=["POST"])
+@admin_required
+def admin_batch_writeoff(batch_id):
+    batch = Batch.query.get_or_404(batch_id)
+    reason = (request.form.get("reason") or "").strip()
+
+    if not reason:
+        flash("Укажите причину списания", "danger")
+        return redirect(url_for("admin.admin_batches"))
+
+    entry = WriteOff(
+        product_id=batch.product_id,
+        quantity=batch.quantity,
+        reason=reason
+    )
+
+    db.session.add(entry)
+    db.session.delete(batch)
+    db.session.commit()
+
+    flash("Партия списана и сохранена в журнале списаний", "success")
+    return redirect(url_for("admin.admin_batches"))
+
+
+@admin_bp.route("/writeoffs")
+@admin_required
+def admin_writeoffs():
+    month_ago = date.today() - timedelta(days=30)
+    writeoffs = (
+        WriteOff.query
+        .join(Product)
+        .filter(WriteOff.created_at >= month_ago)
+        .order_by(WriteOff.created_at.desc())
+        .all()
+    )
+
+    for row in writeoffs:
+        qty = Decimal(str(row.quantity))
+        if row.product.is_weight_based:
+            row._qty_display = format(qty.normalize(), "f").rstrip("0").rstrip(".")
+        else:
+            row._qty_display = str(int(qty))
+
+    return render_template("admin/writeoffs/index.html", writeoffs=writeoffs)
