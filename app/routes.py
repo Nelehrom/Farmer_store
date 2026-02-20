@@ -241,7 +241,9 @@ def product_edit(product_id):
 
     categories = Category.query.order_by(Category.name.asc()).all()
     form.category_id.choices = [(0, "— Без категории —")] + [(c.id, c.name) for c in categories]
-    form.category_id.data = product.category_id or 0
+
+    if request.method == "GET":
+        form.category_id.data = product.category_id or 0
 
     if form.validate_on_submit():
         product.name = form.name.data
