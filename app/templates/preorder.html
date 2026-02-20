@@ -4,9 +4,9 @@
 
 {% block content %}
 <h1 class="h3 mb-3">Предзаказ</h1>
-<p class="text-muted">Список товаров, комментарий по желанию, выбор времени и подтверждение.</p>
+<p class="text-muted">Оформите бронь и отслеживайте статус в истории заказов.</p>
 
-<div class="row g-4">
+<div class="row g-4 mb-4">
   <div class="col-12 col-lg-7">
     <div id="preorderList"></div>
   </div>
@@ -14,6 +14,9 @@
   <div class="col-12 col-lg-5">
     <div class="card shadow-sm">
       <div class="card-body">
+        <label for="preorderDate" class="form-label">Дата получения</label>
+        <input id="preorderDate" type="date" class="form-control mb-3" value="{{ today.isoformat() }}">
+
         <label for="preorderComment" class="form-label">Комментарий (по желанию)</label>
         <textarea id="preorderComment" class="form-control mb-3" rows="4" placeholder="Например: упаковать отдельно"></textarea>
 
@@ -25,4 +28,49 @@
     </div>
   </div>
 </div>
+
+<h2 class="h4 mb-3">История заказов</h2>
+{% if orders %}
+  <div class="d-flex flex-column gap-3">
+    {% for order in orders %}
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start gap-3 mb-2">
+            <div>
+              <div class="fw-semibold">Заказ #{{ order.id }}</div>
+              <div class="small text-muted">Создан: {{ order.created_at.strftime('%d.%m.%Y %H:%M') }}</div>
+            </div>
+            <span class="badge {% if order.status == 'active' %}text-bg-primary{% elif order.status == 'completed' %}text-bg-success{% else %}text-bg-secondary{% endif %}">
+              {% if order.status == 'active' %}Активный{% elif order.status == 'completed' %}Выдан{% else %}Отменён{% endif %}
+            </span>
+          </div>
+
+          <div class="small mb-2">Дата получения: {{ order.pickup_date.strftime('%d.%m.%Y') }}{% if order.pickup_time %}, {{ order.pickup_time }}{% endif %}</div>
+
+          <ul class="mb-2">
+            {% for item in order.items %}
+              <li>{{ item.product.name }} — {{ item._qty_display if item._qty_display is defined else item.quantity }}</li>
+            {% endfor %}
+          </ul>
+
+          {% if order.comment %}
+            <div class="small mb-2">Комментарий: {{ order.comment }}</div>
+          {% endif %}
+          {% if order.cancel_reason %}
+            <div class="small text-danger mb-2">Причина отмены: {{ order.cancel_reason }}</div>
+          {% endif %}
+
+          {% if order.status == 'active' %}
+            <form method="post" action="{{ url_for('main.preorder_cancel', order_id=order.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-sm btn-outline-danger">Отменить заказ</button>
+            </form>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="alert alert-light border">У вас пока нет заказов.</div>
+{% endif %}
 {% endblock %}

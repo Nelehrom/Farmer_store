@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from app import db
 from flask_login import UserMixin
 from decimal import Decimal
@@ -8,7 +8,6 @@ class User(db.Model, UserMixin):
 
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(64), unique=True, nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=True)
     phone = db.Column(db.String(20), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
@@ -23,6 +22,11 @@ class Preorder(db.Model):
 
     comment = db.Column(db.Text, nullable=True)
     pickup_time = db.Column(db.String(5), nullable=True)
+    pickup_date = db.Column(db.Date, nullable=False, default=date.today)
+    status = db.Column(db.String(20), nullable=False, default="active", index=True)
+    cancel_reason = db.Column(db.Text, nullable=True)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    cancelled_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False, index=True)
 
     items = db.relationship(
@@ -31,6 +35,15 @@ class Preorder(db.Model):
         lazy=True,
         cascade="all, delete-orphan"
     )
+
+    def mark_completed(self):
+        self.status = "completed"
+        self.completed_at = datetime.utcnow()
+
+    def mark_cancelled(self, reason=None):
+        self.status = "cancelled"
+        self.cancelled_at = datetime.utcnow()
+        self.cancel_reason = (reason or "").strip() or None
 
 
 class PreorderItem(db.Model):

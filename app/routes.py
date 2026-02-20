@@ -1,6 +1,7 @@
 from functools import wraps
 from datetime import date, timedelta
 from decimal import Decimal
+import re
 
 from flask import (
     Blueprint, render_template, redirect, url_for, flash,
@@ -70,6 +71,36 @@ def _clear_sales_lines():
     session.modified = True
 
 
+def normalize_phone(phone_raw):
+    digits = re.sub(r"\D", "", (phone_raw or ""))
+    if len(digits) == 11 and digits.startswith("8"):
+        digits = f"7{digits[1:]}"
+    if len(digits) == 10:
+        digits = f"7{digits}"
+    if len(digits) != 11 or not digits.startswith("7"):
+        return None
+    return f"+{digits}"
+
+
+def find_user_by_phone(phone_raw):
+    normalized = normalize_phone(phone_raw)
+    if not normalized:
+        return None
+
+    users = User.query.all()
+    for user in users:
+        if normalize_phone(user.phone) == normalized:
+            return user
+    return None
+
+
+def format_preorder_qty(item):
+    qty = Decimal(str(item.quantity))
+    if item.product.is_weight_based:
+        return f"{format(qty.normalize(), 'f').rstrip('0').rstrip('.')} кг"
+    return f"{int(qty)} шт"
+
+
 # -----------------------
 # Main (public) routes
 # -----------------------
@@ -83,7 +114,12 @@ def index():
 def register():
     form = RegistrationForm()
     if form.validate_on_submit():
-        if User.query.filter_by(phone=form.phone.data.strip()).first():
+        normalized_phone = normalize_phone(form.phone.data)
+        if not normalized_phone:
+            flash("Введите корректный телефон в формате +79999999999", "danger")
+            return render_template("register.html", form=form)
+
+        if find_user_by_phone(normalized_phone):
             flash("Пользователь с таким телефоном уже существует", "danger")
             return render_template("register.html", form=form)
 
@@ -94,7 +130,7 @@ def register():
         hashed_pw = generate_password_hash(form.password.data)
         user = User(
             username=form.username.data.strip(),
-            phone=form.phone.data.strip(),
+            phone=normalized_phone,
             password_hash=hashed_pw
         )
         db.session.add(user)
@@ -110,7 +146,7 @@ def login():
     form = LoginForm()
 
     if form.validate_on_submit():
-        user = User.query.filter_by(phone=form.phone.data.strip()).first()
+        user = find_user_by_phone(form.phone.data)
 
         if user and check_password_hash(user.password_hash, form.password.data):
             login_user(user, remember=form.remember.data)
@@ -145,9 +181,16 @@ def favorites():
 @main_bp.route("/preorder")
 @login_required
 def preorder():
-    return render_template("preorder.html")
-
-
+    orders = (
+        Preorder.query
+        .filter_by(user_id=current_user.id)
+        .order_by(Preorder.created_at.desc(), Preorder.id.desc())
+        .all()
+    )
+    for order in orders:
+        for item in order.items:
+            item._qty_display = format_preorder_qty(item)
+    return render_template("preorder.html", orders=orders, today=date.today())
 
 
 @main_bp.route("/preorder/confirm", methods=["POST"])
@@ -160,19 +203,27 @@ def preorder_confirm():
     if not raw_items:
         return jsonify({"ok": False, "error": "Список предзаказа пуст"}), 400
 
+    pickup_date_raw = (payload.get("pickup_date") or "").strip()
+    try:
+        pickup_date = date.fromisoformat(pickup_date_raw) if pickup_date_raw else date.today()
+    except ValueError:
+        return jsonify({"ok": False, "error": "Некорректная дата получения"}), 400
+
     product_ids = [int(item.get("id")) for item in raw_items if str(item.get("id", "")).isdigit()]
     products = {p.id: p for p in Product.query.filter(Product.id.in_(product_ids)).all()}
 
     preorder = Preorder(
         user_id=current_user.id,
         comment=(payload.get("comment") or "").strip() or None,
-        pickup_time=(payload.get("time") or "").strip() or None
+        pickup_time=(payload.get("time") or "").strip() or None,
+        pickup_date=pickup_date,
     )
     db.session.add(preorder)
 
     for item in raw_items:
         product_id = int(item.get("id")) if str(item.get("id", "")).isdigit() else None
-        if not product_id or product_id not in products:
+        product = products.get(product_id)
+        if not product:
             continue
 
         try:
@@ -183,6 +234,9 @@ def preorder_confirm():
         if qty <= 0:
             continue
 
+        if not product.is_weight_based and qty != qty.to_integral_value():
+            continue
+
         db.session.add(PreorderItem(preorder=preorder, product_id=product_id, quantity=qty))
 
     if not preorder.items:
@@ -191,6 +245,24 @@ def preorder_confirm():
 
     db.session.commit()
     return jsonify({"ok": True})
+
+
+@main_bp.route("/preorder/<int:order_id>/cancel", methods=["POST"])
+@login_required
+def preorder_cancel(order_id):
+    order = Preorder.query.get_or_404(order_id)
+    if order.user_id != current_user.id and not current_user.is_admin:
+        abort(403)
+
+    if order.status != "active":
+        flash("Можно отменить только активный заказ", "warning")
+        return redirect(url_for("main.preorder"))
+
+    reason = (request.form.get("reason") or "").strip() or "Отменено пользователем"
+    order.mark_cancelled(reason)
+    db.session.commit()
+    flash("Заказ отменён", "info")
+    return redirect(url_for("main.preorder"))
 
 
 @main_bp.route("/products")
@@ -464,13 +536,45 @@ def admin_orders():
 
     for order in orders:
         for item in order.items:
-            qty = Decimal(str(item.quantity))
-            if item.product.is_weight_based:
-                item._qty_display = f"{format(qty.normalize(), 'f').rstrip('0').rstrip('.')} кг"
-            else:
-                item._qty_display = f"{int(qty)} шт"
+            item._qty_display = format_preorder_qty(item)
 
-    return render_template("admin/orders/index.html", orders=orders)
+    active_orders = [o for o in orders if o.status == "active"]
+    archived_orders = [o for o in orders if o.status != "active"]
+
+    return render_template("admin/orders/index.html", active_orders=active_orders, archived_orders=archived_orders)
+
+
+@admin_bp.route("/orders/<int:order_id>/complete", methods=["POST"])
+@admin_required
+def admin_order_complete(order_id):
+    order = Preorder.query.get_or_404(order_id)
+    if order.status != "active":
+        flash("Выдать можно только активный заказ", "warning")
+        return redirect(url_for("admin.admin_orders"))
+
+    order.mark_completed()
+    db.session.commit()
+    flash(f"Заказ #{order.id} выдан", "success")
+    return redirect(url_for("admin.admin_orders"))
+
+
+@admin_bp.route("/orders/<int:order_id>/cancel", methods=["POST"])
+@admin_required
+def admin_order_cancel(order_id):
+    order = Preorder.query.get_or_404(order_id)
+    if order.status != "active":
+        flash("Отменить можно только активный заказ", "warning")
+        return redirect(url_for("admin.admin_orders"))
+
+    reason = (request.form.get("reason") or "").strip()
+    if not reason:
+        flash("Укажите причину отмены", "danger")
+        return redirect(url_for("admin.admin_orders"))
+
+    order.mark_cancelled(reason)
+    db.session.commit()
+    flash(f"Заказ #{order.id} отменён", "info")
+    return redirect(url_for("admin.admin_orders"))
 
 
 # -----------------------

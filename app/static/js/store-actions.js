@@ -97,6 +97,7 @@
   };
 
   const isLiked = (productId) => getLikes().some((item) => item.id === Number(productId));
+  const isPreordered = (productId) => getPreorders().some((item) => item.id === Number(productId));
 
   const syncLikeButtons = () => {
     document.querySelectorAll("[data-like-btn]").forEach((btn) => {
@@ -141,17 +142,27 @@
     });
   };
 
+  const syncPreorderButtons = () => {
+    document.querySelectorAll("[data-preorder-btn]").forEach((btn) => {
+      const exists = isPreordered(btn.dataset.productId);
+      btn.textContent = exists ? "🧺 Убрать бронь" : "🛒 Забронировать";
+      btn.classList.toggle("btn-outline-secondary", exists);
+      btn.classList.toggle("btn-outline-primary", !exists);
+    });
+  };
+
   const handlePreorderToggle = (btn) => {
     const product = getProductFromDataset(btn);
     const exists = getPreorders().some((item) => item.id === product.id);
     if (!exists) {
       setPreorders(upsertById(getPreorders(), { ...product, quantity: product.is_weight_based ? 0.5 : 1 }));
-      showTopAlert({ category: "primary", message: `Товар <strong>${product.name}</strong> добавлен в предзаказ.` });
+      showTopAlert({ category: "primary", message: `Товар <strong>${product.name}</strong> добавлен в бронь.` });
     } else {
       setPreorders(removeById(getPreorders(), product.id));
-      showTopAlert({ category: "secondary", message: `Товар <strong>${product.name}</strong> удалён из предзаказа.` });
+      showTopAlert({ category: "secondary", message: `Товар <strong>${product.name}</strong> удалён из брони.` });
     }
     renderPreorders();
+    syncPreorderButtons();
   };
 
   const renderFavorites = () => {
@@ -193,13 +204,14 @@
                   data-product-supplier="${item.supplier_name}"
                   data-product-image="${item.image_url}"
                   data-product-category-id="${item.category_id}"
-                  data-product-is-weight-based="${item.is_weight_based ? 1 : 0}">🛒 В предзаказ</button>
+                  data-product-is-weight-based="${item.is_weight_based ? 1 : 0}">🛒 Забронировать</button>
               </div>
             </div>
           </div>
         </div>
       </div>
     `).join("");
+    syncPreorderButtons();
   };
 
   const renderPreorders = () => {
@@ -215,7 +227,7 @@
     holder.innerHTML = items.map((item) => {
       const step = item.is_weight_based ? "0.1" : "1";
       const min = item.is_weight_based ? "0.1" : "1";
-      const suffix = item.is_weight_based ? "кг (ориентировочно)" : "упак.";
+      const suffix = item.is_weight_based ? "кг" : "шт";
       return `
       <div class="card mb-2 shadow-sm">
         <div class="card-body d-flex justify-content-between align-items-center gap-3">
@@ -245,11 +257,12 @@
 
       const time = document.getElementById("preorderTime")?.value || "";
       const comment = document.getElementById("preorderComment")?.value || "";
+      const pickupDate = document.getElementById("preorderDate")?.value || "";
 
       const resp = await fetch("/preorder/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items, time, comment })
+        body: JSON.stringify({ items, time, comment, pickup_date: pickupDate })
       });
 
       const data = await resp.json();
@@ -280,6 +293,10 @@
       value = min;
     }
 
+    if (!items[idx].is_weight_based) {
+      value = Math.round(value);
+    }
+
     items[idx].quantity = value;
     setPreorders(items);
     renderPreorders();
@@ -302,6 +319,7 @@
     renderFavorites();
     renderPreorders();
     syncLikeButtons();
+    syncPreorderButtons();
     initPreorderConfirm();
   });
 })();
