@@ -1,0 +1,112 @@
+{% extends "admin/base.html" %}
+{% block title %}История продаж{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="mb-0">История продаж</h1>
+  <a class="btn btn-outline-primary" href="{{ url_for('admin.admin_sales') }}">Новая продажа</a>
+</div>
+
+<div class="card shadow-sm mb-3">
+  <div class="card-body">
+    <form method="get" action="{{ url_for('admin.admin_sales_history') }}" class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label">Период</label>
+        <select class="form-select" name="period" id="period_select">
+          <option value="" {% if period == '' %}selected{% endif %}>— За всё время —</option>
+          <option value="today" {% if period == 'today' %}selected{% endif %}>За сегодня</option>
+          <option value="yesterday" {% if period == 'yesterday' %}selected{% endif %}>За вчера</option>
+          <option value="week" {% if period == 'week' %}selected{% endif %}>За последнюю неделю</option>
+          <option value="month" {% if period == 'month' %}selected{% endif %}>За последний месяц</option>
+          <option value="custom" {% if period == 'custom' %}selected{% endif %}>Свой интервал</option>
+        </select>
+      </div>
+
+      <div class="col-md-2 custom-date-wrap">
+        <label class="form-label">Дата с</label>
+        <input class="form-control" type="date" name="start_date" value="{{ start_date }}">
+      </div>
+
+      <div class="col-md-2 custom-date-wrap">
+        <label class="form-label">Дата по</label>
+        <input class="form-control" type="date" name="end_date" value="{{ end_date }}">
+      </div>
+
+      <div class="col-md-3">
+        <label class="form-label">Товар</label>
+        <select class="form-select" name="product_id">
+          {% for pid, pname in filter_form.product_id.choices %}
+            <option value="{{ pid }}" {% if pid == selected_product_id %}selected{% endif %}>{{ pname }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-md-2 d-grid">
+        <button class="btn btn-primary" type="submit">Применить</button>
+      </div>
+    </form>
+
+    <div class="mt-2">
+      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin.admin_sales_history') }}">Очистить все фильтры</a>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0 align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>Дата</th>
+            <th>Продажа</th>
+            <th>Товар</th>
+            <th class="text-end">Кол-во</th>
+            <th class="text-end">Цена</th>
+            <th class="text-end">Сумма</th>
+            <th>Изготовлено</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if items %}
+            {% for item in items %}
+              <tr>
+                <td>{{ item.sale.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td>#{{ item.sale_id }}</td>
+                <td>{{ item.product.name }}</td>
+                <td class="text-end">{{ item._qty_display }} {% if item.product.is_weight_based %}кг{% else %}шт{% endif %}</td>
+                <td class="text-end">{{ item.unit_price }} ₽</td>
+                <td class="text-end">{{ item.line_total }} ₽</td>
+                <td>{% if item.source_produced_at %}{{ item.source_produced_at }}{% else %}—{% endif %}</td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="7" class="text-center text-muted py-4">По фильтру продаж нет.</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="p-3 border-top text-end fs-5">
+      Сумма по фильтру: <b>{{ total_sum }} ₽</b>
+    </div>
+  </div>
+</div>
+
+<script>
+  const periodSelectEl = document.getElementById('period_select');
+  const customDateWrapEls = document.querySelectorAll('.custom-date-wrap');
+
+  function toggleCustomDates() {
+    const show = periodSelectEl.value === 'custom';
+    customDateWrapEls.forEach((el) => {
+      el.style.display = show ? '' : 'none';
+    });
+  }
+
+  periodSelectEl.addEventListener('change', toggleCustomDates);
+  toggleCustomDates();
+</script>
+{% endblock %}

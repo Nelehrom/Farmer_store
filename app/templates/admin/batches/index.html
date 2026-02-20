@@ -1,0 +1,107 @@
+{% extends "admin/base.html" %}
+{% block title %}Склад{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="mb-0">Склад (партии)</h1>
+  <a class="btn btn-primary" href="{{ url_for('admin.admin_supply') }}">+ Новая поставка</a>
+</div>
+
+<form class="row g-2 mb-3" method="get">
+  <div class="col-md-6">
+    <input class="form-control" name="q" value="{{ q or '' }}" placeholder="Поиск по названию товара...">
+  </div>
+  <div class="col-md-3">
+    <select class="form-select" name="status">
+      <option value="">Все</option>
+      <option value="active" {% if status=='active' %}selected{% endif %}>Активные</option>
+      <option value="expiring" {% if status=='expiring' %}selected{% endif %}>Скоро истекают</option>
+      <option value="expired" {% if status=='expired' %}selected{% endif %}>Просроченные</option>
+    </select>
+  </div>
+  <div class="col-md-3 d-grid">
+    <button class="btn btn-outline-secondary" type="submit">Фильтр</button>
+  </div>
+</form>
+
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0 align-middle">
+        <thead class="table-light">
+          <tr>
+            <th style="width:70px;">ID</th>
+            <th>Товар</th>
+            <th class="text-end" style="width:160px;">Кол-во</th>
+            <th style="width:160px;">Изготовлено</th>
+            <th style="width:160px;">Годен до</th>
+            <th style="width:140px;" class="text-center">Статус</th>
+            <th style="width:180px;">Создано</th>
+            <th style="width:230px;">Списание</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {% if batches %}
+            {% for b in batches %}
+              <tr>
+                <td>{{ b.id }}</td>
+                <td>
+                  <div class="fw-semibold">{{ b.product.name }}</div>
+                  <div class="small text-muted">
+                    {% if b.product.category %}{{ b.product.category.name }} · {% endif %}
+                    {% if b.product.is_weight_based %}весовой{% else %}штучный{% endif %}
+                  </div>
+                </td>
+
+                <td class="text-end">
+                  <span class="fw-semibold">{{ b._qty_display }}</span>
+                  <span class="text-muted">{{ "кг" if b.product.is_weight_based else "шт" }}</span>
+                </td>
+
+                <td>{{ b.produced_at }}</td>
+                <td>{{ b.expires_at }}</td>
+
+                <td class="text-center">
+                  {% if b._status == "expired" %}
+                    <span class="badge text-bg-danger">просрочено</span>
+                  {% elif b._status == "expiring" %}
+                    <span class="badge text-bg-warning">скоро истекает</span>
+                  {% else %}
+                    <span class="badge text-bg-success">активно</span>
+                  {% endif %}
+                </td>
+
+                <td>
+                  <span class="text-muted small">{{ b.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                </td>
+
+                <td>
+                  <form method="post" action="{{ url_for('admin.admin_batch_writeoff', batch_id=b.id) }}" class="d-flex gap-2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="text" class="form-control form-control-sm" name="reason" placeholder="Причина списания" required>
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Списать</button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="8" class="text-center text-muted py-4">
+                Партии не найдены
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="alert alert-light border mt-3 mb-0">
+  <div class="small text-muted">
+    “Скоро истекает” обычно считается как ≤ 2 дня до конца (настроим в роуте).
+  </div>
+</div>
+{% endblock %}

@@ -42,6 +42,13 @@
           {% for e in form.price.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
         </div>
 
+        <div class="col-md-3">
+          <label class="form-label">{{ form.shelf_life_days.label }}</label>
+          {{ form.shelf_life_days(class="form-control") }}
+          {% for e in form.shelf_life_days.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          <div class="form-text">Напр: 5 (годен 5 дней от даты изготовления)</div>
+        </div>
+
         <div class="col-md-3 d-flex align-items-end">
           <div class="form-check">
             {{ form.is_weight_based(class="form-check-input") }}
