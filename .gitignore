@@ -1,0 +1,6 @@
+# Python cache artifacts
+__pycache__/
+*.py[cod]
+
+# IDE local metadata
+.idea/vcs.xml
