@@ -21,9 +21,6 @@ class Product(db.Model):
     is_weight_based = db.Column(db.Boolean, default=False)  # Весовой или штучный
     price = db.Column(db.Numeric(10, 2), nullable=False)  # Цена (за кг или шт)
 
-    min_weight = db.Column(db.Integer, nullable=True)  # Мин вес, г
-    max_weight = db.Column(db.Integer, nullable=True)  # Макс вес, г
-
     is_frozen = db.Column(db.Boolean, default=False)  # Замороженный?
     is_discounted = db.Column(db.Boolean, default=False)  # Скидка?
 

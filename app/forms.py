@@ -26,9 +26,6 @@ class ProductForm(FlaskForm):
     is_weight_based = BooleanField("Весовой товар")
     price = DecimalField("Цена", places=2, validators=[DataRequired(), NumberRange(min=0)])
 
-    min_weight = IntegerField("Мин. вес (г)", validators=[Optional(), NumberRange(min=0)])
-    max_weight = IntegerField("Макс. вес (г)", validators=[Optional(), NumberRange(min=0)])
-
     is_frozen = BooleanField("Замороженный")
     is_discounted = BooleanField("Скидка")
 

@@ -211,8 +211,6 @@ def product_create():
             details=form.details.data,
             is_weight_based=form.is_weight_based.data,
             price=form.price.data,
-            min_weight=form.min_weight.data,
-            max_weight=form.max_weight.data,
             is_frozen=form.is_frozen.data,
             is_discounted=form.is_discounted.data,
             supplier_name=form.supplier_name.data,
@@ -251,8 +249,6 @@ def product_edit(product_id):
         product.details = form.details.data
         product.is_weight_based = form.is_weight_based.data
         product.price = form.price.data
-        product.min_weight = form.min_weight.data
-        product.max_weight = form.max_weight.data
         product.is_frozen = form.is_frozen.data
         product.is_discounted = form.is_discounted.data
         product.supplier_name = form.supplier_name.data
