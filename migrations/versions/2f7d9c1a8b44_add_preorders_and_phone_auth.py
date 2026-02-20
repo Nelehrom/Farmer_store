@@ -20,13 +20,14 @@ def upgrade():
     op.add_column('users', sa.Column('phone', sa.String(length=20), nullable=True))
 
     op.execute("""
-        UPDATE users
-        SET phone = CASE
-            WHEN is_admin = 1 THEN '+7-999-999-99-99'
-            ELSE '+7-900-000-00-' || printf('%02d', id)
-        END
-        WHERE phone IS NULL OR phone = ''
-    """)
+               UPDATE users
+               SET phone = CASE
+                               WHEN is_admin = TRUE THEN '+7-999-999-99-99'
+                               ELSE '+7-900-000-00-' || LPAD(CAST(id AS text), 2, '0')
+                   END
+               WHERE phone IS NULL
+                  OR phone = ''
+               """)
 
     with op.batch_alter_table('users') as batch_op:
         batch_op.alter_column('email', existing_type=sa.String(length=120), nullable=True)
