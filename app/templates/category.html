@@ -16,12 +16,36 @@
         <a href="{{ url_for('main.product_detail', product_id=product.id) }}" class="text-decoration-none text-dark">
           <img src="{{ product.image_url or '/static/default.jpg' }}" alt="{{ product.name }}"
                class="card-img-top" style="height: 220px; object-fit: cover;">
-          <div class="card-body">
+          <div class="card-body pb-2">
             <h5 class="card-title">{{ product.name }}</h5>
             <p class="mb-1">Поставщик: {{ product.supplier_name or "—" }}</p>
             <p class="mb-0"><b>{{ product.price }} ₽</b></p>
           </div>
         </a>
+        <div class="px-3 pb-3 d-flex gap-2 justify-content-end">
+          <button
+            type="button"
+            class="btn btn-sm btn-outline-primary"
+            data-preorder-btn
+            data-product-id="{{ product.id }}"
+            data-product-name="{{ product.name }}"
+            data-product-price="{{ product.price }}"
+            data-product-supplier="{{ product.supplier_name or '—' }}"
+            data-product-image="{{ product.image_url or '' }}"
+            data-product-category-id="{{ product.category_id }}"
+          >🛒 Бронь</button>
+          <button
+            type="button"
+            class="btn btn-sm btn-outline-danger"
+            data-like-btn
+            data-product-id="{{ product.id }}"
+            data-product-name="{{ product.name }}"
+            data-product-price="{{ product.price }}"
+            data-product-supplier="{{ product.supplier_name or '—' }}"
+            data-product-image="{{ product.image_url or '' }}"
+            data-product-category-id="{{ product.category_id }}"
+          >❤️ Лайк</button>
+        </div>
       </div>
     </div>
   {% else %}
@@ -32,4 +56,3 @@
 </div>
 
 {% endblock %}
-

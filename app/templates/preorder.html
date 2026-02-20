@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+
+{% block title %}Предзаказ{% endblock %}
+
+{% block content %}
+<h1 class="h3 mb-3">Предзаказ</h1>
+<p class="text-muted">Список товаров, комментарий по желанию, выбор времени и подтверждение.</p>
+
+<div class="row g-4">
+  <div class="col-12 col-lg-7">
+    <div id="preorderList"></div>
+  </div>
+
+  <div class="col-12 col-lg-5">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <label for="preorderComment" class="form-label">Комментарий (по желанию)</label>
+        <textarea id="preorderComment" class="form-control mb-3" rows="4" placeholder="Например: упаковать отдельно"></textarea>
+
+        <label for="preorderTime" class="form-label">Выберите удобное время</label>
+        <input id="preorderTime" type="time" class="form-control mb-3">
+
+        <button id="confirmPreorderBtn" type="button" class="btn btn-success w-100">Подтвердить</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

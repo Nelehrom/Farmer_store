@@ -41,8 +41,28 @@
   <p><strong>Теги:</strong> {{ product.tags or "—" }}</p>
 
   <div style="margin-top: 20px; display: flex; gap: 10px;">
-    <button>🛒 Забронировать</button>
-    <button>❤️</button>
+    <button
+      type="button"
+      class="btn btn-outline-primary"
+      data-preorder-btn
+      data-product-id="{{ product.id }}"
+      data-product-name="{{ product.name }}"
+      data-product-price="{{ product.price }}"
+      data-product-supplier="{{ product.supplier_name or '—' }}"
+      data-product-image="{{ product.image_url or '' }}"
+      data-product-category-id="{{ product.category_id }}"
+    >🛒 Забронировать</button>
+    <button
+      type="button"
+      class="btn btn-outline-danger"
+      data-like-btn
+      data-product-id="{{ product.id }}"
+      data-product-name="{{ product.name }}"
+      data-product-price="{{ product.price }}"
+      data-product-supplier="{{ product.supplier_name or '—' }}"
+      data-product-image="{{ product.image_url or '' }}"
+      data-product-category-id="{{ product.category_id }}"
+    >❤️ Лайк</button>
   </div>
 
 </div>
