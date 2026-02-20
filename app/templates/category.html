@@ -33,6 +33,7 @@
             data-product-supplier="{{ product.supplier_name or '—' }}"
             data-product-image="{{ product.image_url or '' }}"
             data-product-category-id="{{ product.category_id }}"
+            data-product-is-weight-based="{{ 1 if product.is_weight_based else 0 }}"
           >🛒 Бронь</button>
           <button
             type="button"
@@ -44,6 +45,7 @@
             data-product-supplier="{{ product.supplier_name or '—' }}"
             data-product-image="{{ product.image_url or '' }}"
             data-product-category-id="{{ product.category_id }}"
+            data-product-is-weight-based="{{ 1 if product.is_weight_based else 0 }}"
           >❤️ Лайк</button>
         </div>
       </div>

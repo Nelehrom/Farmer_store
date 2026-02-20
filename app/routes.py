@@ -4,20 +4,19 @@ from decimal import Decimal
 
 from flask import (
     Blueprint, render_template, redirect, url_for, flash,
-    request, abort, session
+    request, abort, session, jsonify
 )
 from flask_login import login_user, logout_user, login_required, current_user
 from sqlalchemy.orm import load_only
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from app import db
+from app import db, csrf
 from app.forms import (
-    RegistrationForm, ProductForm, CategoryForm,
+    RegistrationForm, LoginForm, ProductForm, CategoryForm,
     SupplySearchForm, SupplyAddLineForm,
     SalesAddLineForm, SalesHistoryFilterForm
-
 )
-from app.models import User, Product, Category, Batch, WriteOff, Sale, SaleItem
+from app.models import User, Product, Category, Batch, WriteOff, Sale, SaleItem, Preorder, PreorderItem
 from app.uploads import save_product_image, save_category_image
 
 
@@ -84,10 +83,18 @@ def index():
 def register():
     form = RegistrationForm()
     if form.validate_on_submit():
+        if User.query.filter_by(phone=form.phone.data.strip()).first():
+            flash("Пользователь с таким телефоном уже существует", "danger")
+            return render_template("register.html", form=form)
+
+        if User.query.filter_by(username=form.username.data.strip()).first():
+            flash("Пользователь с таким именем уже существует", "danger")
+            return render_template("register.html", form=form)
+
         hashed_pw = generate_password_hash(form.password.data)
         user = User(
-            username=form.username.data,
-            email=form.email.data,
+            username=form.username.data.strip(),
+            phone=form.phone.data.strip(),
             password_hash=hashed_pw
         )
         db.session.add(user)
@@ -100,18 +107,17 @@ def register():
 
 @main_bp.route("/login", methods=["GET", "POST"])
 def login():
-    from app.forms import LoginForm
     form = LoginForm()
 
     if form.validate_on_submit():
-        user = User.query.filter_by(email=form.email.data).first()
+        user = User.query.filter_by(phone=form.phone.data.strip()).first()
 
         if user and check_password_hash(user.password_hash, form.password.data):
             login_user(user, remember=form.remember.data)
             flash("Вы вошли в аккаунт!", "success")
             return redirect(url_for("main.profile"))
 
-        flash("Неверный email или пароль", "danger")
+        flash("Неверный телефон или пароль", "danger")
 
     return render_template("login.html", form=form)
 
@@ -140,6 +146,51 @@ def favorites():
 @login_required
 def preorder():
     return render_template("preorder.html")
+
+
+
+
+@main_bp.route("/preorder/confirm", methods=["POST"])
+@login_required
+@csrf.exempt
+def preorder_confirm():
+    payload = request.get_json(silent=True) or {}
+    raw_items = payload.get("items") or []
+
+    if not raw_items:
+        return jsonify({"ok": False, "error": "Список предзаказа пуст"}), 400
+
+    product_ids = [int(item.get("id")) for item in raw_items if str(item.get("id", "")).isdigit()]
+    products = {p.id: p for p in Product.query.filter(Product.id.in_(product_ids)).all()}
+
+    preorder = Preorder(
+        user_id=current_user.id,
+        comment=(payload.get("comment") or "").strip() or None,
+        pickup_time=(payload.get("time") or "").strip() or None
+    )
+    db.session.add(preorder)
+
+    for item in raw_items:
+        product_id = int(item.get("id")) if str(item.get("id", "")).isdigit() else None
+        if not product_id or product_id not in products:
+            continue
+
+        try:
+            qty = Decimal(str(item.get("quantity", "0")))
+        except Exception:
+            continue
+
+        if qty <= 0:
+            continue
+
+        db.session.add(PreorderItem(preorder=preorder, product_id=product_id, quantity=qty))
+
+    if not preorder.items:
+        db.session.rollback()
+        return jsonify({"ok": False, "error": "Некорректные позиции предзаказа"}), 400
+
+    db.session.commit()
+    return jsonify({"ok": True})
 
 
 @main_bp.route("/products")
@@ -180,6 +231,7 @@ def category_view(category_id):
             Product.supplier_name,
             Product.image_url,
             Product.category_id,
+            Product.is_weight_based,
         )
     ).filter_by(category_id=category.id).all()
     return render_template("category.html", category=category, products=products)
@@ -401,6 +453,24 @@ def category_delete(category_id):
     db.session.commit()
     flash("Категория удалена", "info")
     return redirect(url_for("admin.admin_categories"))
+
+
+
+
+@admin_bp.route("/orders")
+@admin_required
+def admin_orders():
+    orders = Preorder.query.order_by(Preorder.created_at.desc(), Preorder.id.desc()).all()
+
+    for order in orders:
+        for item in order.items:
+            qty = Decimal(str(item.quantity))
+            if item.product.is_weight_based:
+                item._qty_display = f"{format(qty.normalize(), 'f').rstrip('0').rstrip('.')} кг"
+            else:
+                item._qty_display = f"{int(qty)} шт"
+
+    return render_template("admin/orders/index.html", orders=orders)
 
 
 # -----------------------

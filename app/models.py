@@ -8,9 +8,40 @@ class User(db.Model, UserMixin):
 
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(64), unique=True, nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=True)
+    phone = db.Column(db.String(20), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
+
+
+class Preorder(db.Model):
+    __tablename__ = "preorders"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    user = db.relationship("User", backref=db.backref("preorders", lazy=True))
+
+    comment = db.Column(db.Text, nullable=True)
+    pickup_time = db.Column(db.String(5), nullable=True)
+    created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False, index=True)
+
+    items = db.relationship(
+        "PreorderItem",
+        backref="preorder",
+        lazy=True,
+        cascade="all, delete-orphan"
+    )
+
+
+class PreorderItem(db.Model):
+    __tablename__ = "preorder_items"
+
+    id = db.Column(db.Integer, primary_key=True)
+    preorder_id = db.Column(db.Integer, db.ForeignKey("preorders.id"), nullable=False, index=True)
+    product_id = db.Column(db.Integer, db.ForeignKey("products.id"), nullable=False, index=True)
+    product = db.relationship("Product", backref=db.backref("preorder_items", lazy=True))
+
+    quantity = db.Column(db.Numeric(10, 3), nullable=False)
 
 
 class Product(db.Model):

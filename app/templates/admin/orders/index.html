@@ -1,0 +1,40 @@
+{% extends 'admin/base.html' %}
+{% block title %}Заказы{% endblock %}
+
+{% block content %}
+<h1 class="h3 mb-3">Предзаказы</h1>
+
+{% if orders %}
+  <div class="d-flex flex-column gap-3">
+    {% for order in orders %}
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start mb-3">
+            <div>
+              <h5 class="mb-1">Заказ #{{ order.id }}</h5>
+              <div class="text-muted small">{{ order.created_at.strftime('%d.%m.%Y %H:%M') }}</div>
+            </div>
+            <div class="text-end">
+              <div><strong>{{ order.user.username }}</strong></div>
+              <div class="small">{{ order.user.phone }}</div>
+            </div>
+          </div>
+
+          <ul class="mb-3">
+            {% for item in order.items %}
+              <li>{{ item.product.name }} — {{ item._qty_display }}</li>
+            {% endfor %}
+          </ul>
+
+          <div class="small text-muted">Удобное время: {{ order.pickup_time or 'не указано' }}</div>
+          {% if order.comment %}
+            <div class="small mt-1">Комментарий: {{ order.comment }}</div>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="alert alert-light border">Пока нет предзаказов.</div>
+{% endif %}
+{% endblock %}
