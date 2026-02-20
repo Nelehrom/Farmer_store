@@ -34,6 +34,13 @@
     supplier_name: node.dataset.productSupplier || "—",
     image_url: node.dataset.productImage || "",
     category_id: node.dataset.productCategoryId || "",
+    is_weight_based: String(node.dataset.productIsWeightBased) === "1",
+  });
+
+  const normalizePreorderItem = (item) => ({
+    ...item,
+    is_weight_based: Boolean(item.is_weight_based),
+    quantity: Number(item.quantity || 1),
   });
 
   const getAlertsContainer = () => {
@@ -138,7 +145,7 @@
     const product = getProductFromDataset(btn);
     const exists = getPreorders().some((item) => item.id === product.id);
     if (!exists) {
-      setPreorders(upsertById(getPreorders(), product));
+      setPreorders(upsertById(getPreorders(), { ...product, quantity: product.is_weight_based ? 0.5 : 1 }));
       showTopAlert({ category: "primary", message: `Товар <strong>${product.name}</strong> добавлен в предзаказ.` });
     } else {
       setPreorders(removeById(getPreorders(), product.id));
@@ -177,14 +184,16 @@
                   data-product-price="${item.price}"
                   data-product-supplier="${item.supplier_name}"
                   data-product-image="${item.image_url}"
-                  data-product-category-id="${item.category_id}">💔 Убрать лайк</button>
+                  data-product-category-id="${item.category_id}"
+                  data-product-is-weight-based="${item.is_weight_based ? 1 : 0}">💔 Убрать лайк</button>
                 <button type="button" class="btn btn-sm btn-outline-primary" data-preorder-btn
                   data-product-id="${item.id}"
                   data-product-name="${item.name}"
                   data-product-price="${item.price}"
                   data-product-supplier="${item.supplier_name}"
                   data-product-image="${item.image_url}"
-                  data-product-category-id="${item.category_id}">🛒 В предзаказ</button>
+                  data-product-category-id="${item.category_id}"
+                  data-product-is-weight-based="${item.is_weight_based ? 1 : 0}">🛒 В предзаказ</button>
               </div>
             </div>
           </div>
@@ -197,56 +206,84 @@
     const holder = document.getElementById("preorderList");
     if (!holder) return;
 
-    const items = getPreorders();
+    const items = getPreorders().map(normalizePreorderItem);
     if (!items.length) {
       holder.innerHTML = '<div class="alert alert-light border mb-0">Список предзаказа пуст.</div>';
       return;
     }
 
-    holder.innerHTML = items.map((item) => `
+    holder.innerHTML = items.map((item) => {
+      const step = item.is_weight_based ? "0.1" : "1";
+      const min = item.is_weight_based ? "0.1" : "1";
+      const suffix = item.is_weight_based ? "кг (ориентировочно)" : "упак.";
+      return `
       <div class="card mb-2 shadow-sm">
-        <div class="card-body d-flex justify-content-between align-items-center">
+        <div class="card-body d-flex justify-content-between align-items-center gap-3">
           <div>
             <div class="fw-semibold">${item.name}</div>
             <div class="text-muted small">${item.supplier_name}</div>
           </div>
-          <div class="fw-semibold">${item.price} ₽</div>
+          <div class="d-flex align-items-center gap-2">
+            <input type="number" class="form-control form-control-sm" style="width: 120px" min="${min}" step="${step}" value="${item.quantity}" data-preorder-qty data-product-id="${item.id}">
+            <span class="small text-muted">${suffix}</span>
+          </div>
         </div>
-      </div>
-    `).join("");
+      </div>`;
+    }).join("");
   };
 
   const initPreorderConfirm = () => {
     const confirmBtn = document.getElementById("confirmPreorderBtn");
     if (!confirmBtn) return;
 
-    confirmBtn.addEventListener("click", () => {
-      if (!getPreorders().length) {
+    confirmBtn.addEventListener("click", async () => {
+      const items = getPreorders().map(normalizePreorderItem);
+      if (!items.length) {
         showTopAlert({ category: "warning", message: "Добавьте товары в предзаказ перед подтверждением." });
         return;
       }
 
-      const time = document.getElementById("preorderTime")?.value || "не выбрано";
-      const comment = document.getElementById("preorderComment")?.value || "без комментария";
+      const time = document.getElementById("preorderTime")?.value || "";
+      const comment = document.getElementById("preorderComment")?.value || "";
 
-      showTopAlert({
-        category: "info",
-        message: `Точно оформить предзаказ? Время: <strong>${time}</strong>, комментарий: ${comment}.`,
-        actions: [
-          {
-            label: "Да, оформить",
-            className: "btn btn-sm btn-success",
-            onClick: (alertNode) => {
-              setPreorders([]);
-              renderPreorders();
-              if (alertNode) alertNode.remove();
-              showTopAlert({ category: "success", message: "Предзаказ оформлен! Мы скоро свяжемся с вами." });
-            }
-          }
-        ]
+      const resp = await fetch("/preorder/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items, time, comment })
       });
+
+      const data = await resp.json();
+      if (!resp.ok || !data.ok) {
+        showTopAlert({ category: "danger", message: data.error || "Не удалось оформить предзаказ" });
+        return;
+      }
+
+      setPreorders([]);
+      renderPreorders();
+      showTopAlert({ category: "success", message: "Предзаказ оформлен! Мы скоро свяжемся с вами." });
     });
   };
+
+  document.addEventListener("change", (event) => {
+    const qtyInput = event.target.closest("[data-preorder-qty]");
+    if (!qtyInput) return;
+
+    const productId = Number(qtyInput.dataset.productId);
+    const items = getPreorders().map(normalizePreorderItem);
+    const idx = items.findIndex((item) => item.id === productId);
+    if (idx === -1) return;
+
+    let value = Number(qtyInput.value || 0);
+    const min = items[idx].is_weight_based ? 0.1 : 1;
+
+    if (!Number.isFinite(value) || value < min) {
+      value = min;
+    }
+
+    items[idx].quantity = value;
+    setPreorders(items);
+    renderPreorders();
+  });
 
   document.addEventListener("click", (event) => {
     const likeBtn = event.target.closest("[data-like-btn]");
