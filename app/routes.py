@@ -7,6 +7,7 @@ from flask import (
     request, abort, session
 )
 from flask_login import login_user, logout_user, login_required, current_user
+from sqlalchemy.orm import load_only
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from app import db
@@ -73,6 +74,12 @@ def _clear_sales_lines():
 # -----------------------
 # Main (public) routes
 # -----------------------
+
+@main_bp.route("/")
+def index():
+    return redirect(url_for("main.products"))
+
+
 @main_bp.route("/register", methods=["GET", "POST"])
 def register():
     form = RegistrationForm()
@@ -87,6 +94,7 @@ def register():
         db.session.commit()
         flash("Регистрация прошла успешно! Войдите в аккаунт.", "success")
         return redirect(url_for("main.login"))
+
     return render_template("register.html", form=form)
 
 
@@ -122,6 +130,18 @@ def profile():
     return render_template("profile.html")
 
 
+@main_bp.route("/favorites")
+@login_required
+def favorites():
+    return render_template("favorites.html")
+
+
+@main_bp.route("/preorder")
+@login_required
+def preorder():
+    return render_template("preorder.html")
+
+
 @main_bp.route("/products")
 def products():
     categories = Category.query.order_by(Category.name.asc()).all()
@@ -130,14 +150,38 @@ def products():
 
 @main_bp.route("/product/<int:product_id>")
 def product_detail(product_id):
-    product = Product.query.get_or_404(product_id)
+    product = Product.query.options(
+        load_only(
+            Product.id,
+            Product.name,
+            Product.description,
+            Product.details,
+            Product.is_weight_based,
+            Product.price,
+            Product.is_frozen,
+            Product.is_discounted,
+            Product.supplier_name,
+            Product.image_url,
+            Product.tags,
+            Product.category_id,
+        )
+    ).get_or_404(product_id)
     return render_template("product_detail.html", product=product)
 
 
 @main_bp.route("/category/<int:category_id>")
 def category_view(category_id):
     category = Category.query.get_or_404(category_id)
-    products = Product.query.filter_by(category_id=category.id).all()
+    products = Product.query.options(
+        load_only(
+            Product.id,
+            Product.name,
+            Product.price,
+            Product.supplier_name,
+            Product.image_url,
+            Product.category_id,
+        )
+    ).filter_by(category_id=category.id).all()
     return render_template("category.html", category=category, products=products)
 
 
@@ -233,7 +277,9 @@ def product_edit(product_id):
 
     categories = Category.query.order_by(Category.name.asc()).all()
     form.category_id.choices = [(0, "— Без категории —")] + [(c.id, c.name) for c in categories]
-    form.category_id.data = product.category_id or 0
+
+    if request.method == "GET":
+        form.category_id.data = product.category_id or 0
 
     if form.validate_on_submit():
         product.name = form.name.data
@@ -241,8 +287,6 @@ def product_edit(product_id):
         product.details = form.details.data
         product.is_weight_based = form.is_weight_based.data
         product.price = form.price.data
-        product.min_weight = form.min_weight.data
-        product.max_weight = form.max_weight.data
         product.is_frozen = form.is_frozen.data
         product.is_discounted = form.is_discounted.data
         product.supplier_name = form.supplier_name.data
