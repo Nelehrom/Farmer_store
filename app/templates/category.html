@@ -1,42 +1,35 @@
 {% extends 'base.html' %}
+{% block title %}{{ category.name }}{% endblock %}
 {% block content %}
 
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-  <a href="{{ url_for('main.products') }}" style="text-decoration: none;">
-    ← Назад в каталог
-  </a>
-
-  <div>
-    <span>Профиль: {{ current_user.username }}</span>
-    |
-    <a href="{{ url_for('main.logout') }}">Выйти</a>
-  </div>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <a href="{{ url_for('main.products') }}" class="text-decoration-none">← Назад в каталог</a>
+  <span class="text-muted">Категория: {{ category.name }}</span>
 </div>
 
-<h2 style="text-align: center;">{{ category.name }}</h2>
+<h2 class="mb-4">{{ category.name }}</h2>
 
-<div style="display: flex; justify-content: center; flex-wrap: wrap; gap: 20px;">
+<div class="row g-4">
   {% for product in products %}
-    <div style="width: 250px; border-radius: 16px; background: #f9f9f9; box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-                overflow: hidden; padding: 10px; text-decoration: none; color: inherit;">
-
-      <a href="{{ url_for('main.product_detail', product_id=product.id) }}"
-         style="text-decoration: none; color: inherit;">
-        <img src="{{ product.image_url or '/static/default.jpg' }}" alt="img"
-             style="width: 100%; height: 200px; object-fit: cover; border-radius: 12px;">
-        <h4>{{ product.name }}</h4>
-      </a>
-
-      <p style="margin: 0;">Поставщик: {{ product.supplier_name or "—" }}</p>
-      <p style="margin: 0;"><b>{{ product.price }} ₽</b></p>
-      <p style="margin: 0;">⭐ {{ product.rating or 0 }}/5</p>
-
-      <div style="margin-top: 8px; display: flex; justify-content: space-between;">
-        <button type="button">🤍</button>
-        <button type="button">🔒 Забронировать</button>
+    <div class="col-12 col-md-6 col-xl-4">
+      <div class="card h-100 shadow-sm">
+        <a href="{{ url_for('main.product_detail', product_id=product.id) }}" class="text-decoration-none text-dark">
+          <img src="{{ product.image_url or '/static/default.jpg' }}" alt="{{ product.name }}"
+               class="card-img-top" style="height: 220px; object-fit: cover;">
+          <div class="card-body">
+            <h5 class="card-title">{{ product.name }}</h5>
+            <p class="mb-1">Поставщик: {{ product.supplier_name or "—" }}</p>
+            <p class="mb-0"><b>{{ product.price }} ₽</b></p>
+          </div>
+        </a>
       </div>
+    </div>
+  {% else %}
+    <div class="col-12">
+      <div class="alert alert-info mb-0">В этой категории пока нет товаров.</div>
     </div>
   {% endfor %}
 </div>
 
 {% endblock %}
+

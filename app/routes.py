@@ -2,6 +2,7 @@ from functools import wraps
 
 from flask import Blueprint, render_template, redirect, url_for, flash, request, abort
 from flask_login import login_user, logout_user, login_required, current_user
+from sqlalchemy.orm import load_only
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from app import db
@@ -36,6 +37,11 @@ def admin_required(view):
 # -----------------------
 # Main (public) routes
 # -----------------------
+
+@main_bp.route("/")
+def index():
+    return redirect(url_for("main.products"))
+
 
 @main_bp.route("/register", methods=["GET", "POST"])
 def register():
@@ -87,6 +93,18 @@ def profile():
     return render_template("profile.html")
 
 
+@main_bp.route("/favorites")
+@login_required
+def favorites():
+    return render_template("favorites.html")
+
+
+@main_bp.route("/preorder")
+@login_required
+def preorder():
+    return render_template("preorder.html")
+
+
 @main_bp.route("/products")
 def products():
     categories = Category.query.order_by(Category.name.asc()).all()
@@ -95,14 +113,39 @@ def products():
 
 @main_bp.route("/product/<int:product_id>")
 def product_detail(product_id):
-    product = Product.query.get_or_404(product_id)
+    product = Product.query.options(
+        load_only(
+            Product.id,
+            Product.name,
+            Product.description,
+            Product.details,
+            Product.is_weight_based,
+            Product.price,
+            Product.is_frozen,
+            Product.is_discounted,
+            Product.supplier_name,
+            Product.image_url,
+            Product.tags,
+            Product.category_id,
+        )
+    ).get_or_404(product_id)
     return render_template("product_detail.html", product=product)
+
 
 
 @main_bp.route("/category/<int:category_id>")
 def category_view(category_id):
     category = Category.query.get_or_404(category_id)
-    products = Product.query.filter_by(category_id=category.id).all()
+    products = Product.query.options(
+        load_only(
+            Product.id,
+            Product.name,
+            Product.price,
+            Product.supplier_name,
+            Product.image_url,
+            Product.category_id,
+        )
+    ).filter_by(category_id=category.id).all()
     return render_template("category.html", category=category, products=products)
 
 
