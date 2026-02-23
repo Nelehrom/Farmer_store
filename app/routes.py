@@ -193,6 +193,24 @@ def preorder():
     return render_template("preorder.html", orders=orders, today=date.today())
 
 
+@main_bp.route("/preorder/products-meta")
+@login_required
+def preorder_products_meta():
+    ids_raw = (request.args.get("ids") or "").split(",")
+    product_ids = sorted({int(raw_id) for raw_id in ids_raw if raw_id.strip().isdigit()})
+    if not product_ids:
+        return jsonify({"ok": True, "products": {}})
+
+    products = Product.query.filter(Product.id.in_(product_ids)).all()
+    payload = {
+        str(product.id): {
+            "is_weight_based": bool(product.is_weight_based),
+        }
+        for product in products
+    }
+    return jsonify({"ok": True, "products": payload})
+
+
 @main_bp.route("/preorder/confirm", methods=["POST"])
 @login_required
 @csrf.exempt
