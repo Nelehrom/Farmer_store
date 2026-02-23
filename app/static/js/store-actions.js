@@ -246,6 +246,37 @@
     }).join("");
   };
 
+  const syncPreorderMeta = async () => {
+    const items = getPreorders().map(normalizePreorderItem);
+    if (!items.length) return;
+
+    const ids = items.map((item) => item.id).filter((id) => Number.isFinite(id));
+    if (!ids.length) return;
+
+    try {
+      const resp = await fetch(`/preorder/products-meta?ids=${ids.join(",")}`);
+      if (!resp.ok) return;
+
+      const data = await resp.json();
+      if (!data.ok || !data.products) return;
+
+      const patched = items.map((item) => {
+        const meta = data.products[String(item.id)];
+        if (!meta) return item;
+        return {
+          ...item,
+          is_weight_based: Boolean(meta.is_weight_based),
+        };
+      });
+
+      setPreorders(patched);
+      renderPreorders();
+      syncPreorderButtons();
+    } catch (_error) {
+      // intentionally ignore network errors, UI still works with local data
+    }
+  };
+
   const initPreorderConfirm = () => {
     const confirmBtn = document.getElementById("confirmPreorderBtn");
     if (!confirmBtn) return;
@@ -325,5 +356,6 @@
     syncLikeButtons();
     syncPreorderButtons();
     initPreorderConfirm();
+    syncPreorderMeta();
   });
 })();
