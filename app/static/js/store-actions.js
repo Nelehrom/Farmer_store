@@ -43,6 +43,8 @@
     quantity: Number(item.quantity || 1),
   });
 
+  const parseQty = (raw) => Number(String(raw ?? "").replace(",", "."));
+
   const getAlertsContainer = () => {
     const main = document.querySelector("main.container");
     if (!main) return null;
@@ -286,7 +288,7 @@
     const idx = items.findIndex((item) => item.id === productId);
     if (idx === -1) return;
 
-    let value = Number(qtyInput.value || 0);
+    let value = parseQty(qtyInput.value);
     const min = items[idx].is_weight_based ? 0.1 : 1;
 
     if (!Number.isFinite(value) || value < min) {
@@ -295,6 +297,8 @@
 
     if (!items[idx].is_weight_based) {
       value = Math.round(value);
+    } else {
+      value = Math.round(value * 100) / 100;
     }
 
     items[idx].quantity = value;
