@@ -234,7 +234,9 @@ def preorder_confirm():
         if qty <= 0:
             continue
 
-        if not product.is_weight_based and qty != qty.to_integral_value():
+        if product.is_weight_based:
+            qty = qty.quantize(Decimal("0.01"))
+        elif qty != qty.to_integral_value():
             continue
 
         db.session.add(PreorderItem(preorder=preorder, product_id=product_id, quantity=qty))
@@ -245,6 +247,55 @@ def preorder_confirm():
 
     db.session.commit()
     return jsonify({"ok": True})
+
+
+def _phone_digits(phone_raw):
+    return re.sub(r"\D", "", phone_raw or "")
+
+
+@admin_bp.route("/users")
+@admin_required
+def admin_users():
+    q = (request.args.get("q") or "").strip()
+    q_digits = _phone_digits(q)
+
+    users = User.query.order_by(User.created_at.desc(), User.id.desc()).all()
+    if q_digits:
+        users = [
+            user for user in users
+            if q_digits in _phone_digits(user.phone)
+        ]
+
+    return render_template("admin/users/index.html", users=users, q=q)
+
+
+@admin_bp.route("/users/<int:user_id>/orders")
+@admin_required
+def admin_user_orders(user_id):
+    user = User.query.get_or_404(user_id)
+    orders = (
+        Preorder.query
+        .filter_by(user_id=user.id)
+        .order_by(Preorder.created_at.desc(), Preorder.id.desc())
+        .all()
+    )
+
+    for order in orders:
+        for item in order.items:
+            item._qty_display = format_preorder_qty(item)
+
+    total_orders = len(orders)
+    cancelled_orders = sum(1 for order in orders if order.status == "cancelled")
+    first_order_at = min((order.created_at for order in orders), default=None)
+
+    return render_template(
+        "admin/users/orders.html",
+        user=user,
+        orders=orders,
+        total_orders=total_orders,
+        cancelled_orders=cancelled_orders,
+        first_order_at=first_order_at,
+    )
 
 
 @main_bp.route("/preorder/<int:order_id>/cancel", methods=["POST"])
