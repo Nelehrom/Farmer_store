@@ -1,0 +1,35 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Резервные копии{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Резервные копии</h1>
+
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <h5 class="card-title">Скачать резервную копию</h5>
+        <p class="text-muted">Выгрузка данных в JSON: категории, товары, склад, списания и продажи.</p>
+        <a href="{{ url_for('admin.admin_backup_download') }}" class="btn btn-primary">Скачать JSON</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <h5 class="card-title">Восстановить из резервной копии</h5>
+        <p class="text-muted">Загрузка JSON полностью заменит текущие данные в указанных таблицах.</p>
+
+        <form method="post" action="{{ url_for('admin.admin_backup_upload') }}" enctype="multipart/form-data">
+          <div class="mb-3">
+            <input type="file" name="backup_file" accept="application/json,.json" class="form-control" required>
+          </div>
+          <button type="submit" class="btn btn-warning">Загрузить и восстановить</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
