@@ -7,8 +7,7 @@ import json
 
 from flask import (
     Blueprint, render_template, redirect, url_for, flash,
-    request, abort, session, jsonify
-    request, abort, session, send_file
+    request, abort, session, jsonify, send_file
 )
 from flask_login import login_user, logout_user, login_required, current_user
 from sqlalchemy.orm import load_only
