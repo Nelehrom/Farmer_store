@@ -89,7 +89,6 @@ def register():
         hashed_pw = generate_password_hash(form.password.data)
         user = User(
             username=form.username.data,
-            email=form.email.data,
             password_hash=hashed_pw
         )
         db.session.add(user)
@@ -106,14 +105,14 @@ def login():
     form = LoginForm()
 
     if form.validate_on_submit():
-        user = User.query.filter_by(email=form.email.data).first()
+        user = User.query.filter_by(username=form.username.data).first()
 
         if user and check_password_hash(user.password_hash, form.password.data):
             login_user(user, remember=form.remember.data)
             flash("Вы вошли в аккаунт!", "success")
             return redirect(url_for("main.profile"))
 
-        flash("Неверный email или пароль", "danger")
+        flash("Неверное имя пользователя или пароль", "danger")
 
     return render_template("login.html", form=form)
 
