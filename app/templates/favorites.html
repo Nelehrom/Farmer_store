@@ -1,8 +1,10 @@
 {% extends 'base.html' %}
 
-{% block title %}Предзаказ{% endblock %}
+{% block title %}Избранное{% endblock %}
 
 {% block content %}
-<h1 class="h3 mb-3">Предзаказ</h1>
-<div class="alert alert-secondary mb-0">Раздел в разработке. Здесь появится оформление предзаказа.</div>
+<h1 class="h3 mb-3">Избранное</h1>
+<p class="text-muted">Здесь список лайкнутых товаров. Справа можно убрать лайк или отправить товар в предзаказ.</p>
+
+<div id="favoritesList"></div>
 {% endblock %}

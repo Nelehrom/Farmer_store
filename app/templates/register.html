@@ -18,6 +18,11 @@
   <form method="POST">
     {{ form.hidden_tag() }}
     <p>{{ form.username.label }}<br>{{ form.username() }}</p>
+    <p>{{ form.phone.label }}<br>{{ form.phone() }}
+{% for error in form.phone.errors %}
+  <span style="color: red;">[{{ error }}]</span>
+{% endfor %}
+</p>
     <p>{{ form.password.label }}<br>{{ form.password() }}</p>
     <p>{{ form.confirm.label }}<br>{{ form.confirm() }}</p>
     <p>{{ form.submit() }}</p>

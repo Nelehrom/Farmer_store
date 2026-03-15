@@ -14,8 +14,8 @@
   <h2>Вход</h2>
   <form method="POST">
     {{ form.hidden_tag() }}
-    <p>{{ form.username.label }}<br>{{ form.username() }}
-{% for error in form.username.errors %}
+    <p>{{ form.phone.label }}<br>{{ form.phone() }}
+{% for error in form.phone.errors %}
   <span style="color: red;">[{{ error }}]</span>
 {% endfor %}
 </p>

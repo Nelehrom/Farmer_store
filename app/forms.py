@@ -11,13 +11,14 @@ from wtforms.validators import DataRequired, EqualTo, Length, Optional, NumberRa
 
 class RegistrationForm(FlaskForm):
     username = StringField('Имя пользователя', validators=[DataRequired(), Length(min=3, max=64)])
+    phone = StringField('Телефон', validators=[DataRequired(), Length(min=10, max=20)])
     password = PasswordField('Пароль', validators=[DataRequired(), Length(min=6)])
     confirm = PasswordField('Повторите пароль', validators=[DataRequired(), EqualTo('password')])
     submit = SubmitField('Зарегистрироваться')
 
 
 class LoginForm(FlaskForm):
-    username = StringField('Имя пользователя', validators=[DataRequired(), Length(min=3, max=64)])
+    phone = StringField('Телефон', validators=[DataRequired(), Length(min=10, max=20)])
     password = PasswordField('Пароль', validators=[DataRequired()])
     remember = BooleanField('Запомнить меня')
     submit = SubmitField('Войти')
