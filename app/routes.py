@@ -2,10 +2,13 @@ from functools import wraps
 from datetime import date, timedelta
 from decimal import Decimal
 import re
+from io import BytesIO
+import json
 
 from flask import (
     Blueprint, render_template, redirect, url_for, flash,
     request, abort, session, jsonify
+    request, abort, session, send_file
 )
 from flask_login import login_user, logout_user, login_required, current_user
 from sqlalchemy.orm import load_only
@@ -384,7 +387,207 @@ def category_view(category_id):
 @admin_bp.route("/")
 @admin_required
 def dashboard():
-    return render_template("admin/dashboard.html")
+    today = date.today()
+    soon_border = today + timedelta(days=3)
+
+    expired_batches = Batch.query.filter(Batch.expires_at < today).count()
+    expiring_batches = Batch.query.filter(Batch.expires_at >= today, Batch.expires_at <= soon_border).count()
+    stock_products = db.session.query(Batch.product_id).distinct().count()
+    today_sales = Sale.query.filter(db.func.date(Sale.created_at) == today).count()
+
+    recent_sales = (
+        Sale.query
+        .order_by(Sale.created_at.desc())
+        .limit(7)
+        .all()
+    )
+
+    return render_template(
+        "admin/dashboard.html",
+        today_sales=today_sales,
+        expired_batches=expired_batches,
+        expiring_batches=expiring_batches,
+        stock_products=stock_products,
+        recent_sales=recent_sales,
+    )
+
+
+@admin_bp.route("/backup", methods=["GET"])
+@admin_required
+def admin_backup_page():
+    return render_template("admin/backup.html")
+
+
+@admin_bp.route("/backup/download", methods=["GET"])
+@admin_required
+def admin_backup_download():
+    backup_data = {
+        "meta": {
+            "created_at": date.today().isoformat(),
+            "app": "Farmer_store"
+        },
+        "categories": [
+            {"id": c.id, "name": c.name, "image_url": c.image_url}
+            for c in Category.query.order_by(Category.id.asc()).all()
+        ],
+        "products": [
+            {
+                "id": p.id,
+                "name": p.name,
+                "description": p.description,
+                "details": p.details,
+                "is_weight_based": p.is_weight_based,
+                "price": str(p.price),
+                "is_frozen": p.is_frozen,
+                "is_discounted": p.is_discounted,
+                "supplier_name": p.supplier_name,
+                "image_url": p.image_url,
+                "tags": p.tags,
+                "shelf_life_days": p.shelf_life_days,
+                "category_id": p.category_id,
+            }
+            for p in Product.query.order_by(Product.id.asc()).all()
+        ],
+        "batches": [
+            {
+                "id": b.id,
+                "product_id": b.product_id,
+                "quantity": str(b.quantity),
+                "produced_at": b.produced_at.isoformat(),
+                "expires_at": b.expires_at.isoformat(),
+            }
+            for b in Batch.query.order_by(Batch.id.asc()).all()
+        ],
+        "write_offs": [
+            {
+                "id": w.id,
+                "product_id": w.product_id,
+                "quantity": str(w.quantity),
+                "reason": w.reason,
+                "created_at": w.created_at.isoformat() if w.created_at else None,
+            }
+            for w in WriteOff.query.order_by(WriteOff.id.asc()).all()
+        ],
+        "sales": [
+            {
+                "id": s.id,
+                "created_at": s.created_at.isoformat() if s.created_at else None,
+                "items": [
+                    {
+                        "id": i.id,
+                        "product_id": i.product_id,
+                        "quantity": str(i.quantity),
+                        "unit_price": str(i.unit_price),
+                        "line_total": str(i.line_total),
+                        "source_produced_at": i.source_produced_at.isoformat() if i.source_produced_at else None,
+                    }
+                    for i in s.items
+                ]
+            }
+            for s in Sale.query.order_by(Sale.id.asc()).all()
+        ]
+    }
+
+    payload = json.dumps(backup_data, ensure_ascii=False, indent=2)
+    buffer = BytesIO(payload.encode("utf-8"))
+    filename = f"farmer_store_backup_{date.today().strftime('%Y%m%d')}.json"
+
+    return send_file(
+        buffer,
+        as_attachment=True,
+        download_name=filename,
+        mimetype="application/json",
+    )
+
+
+@admin_bp.route("/backup/upload", methods=["POST"])
+@admin_required
+def admin_backup_upload():
+    file = request.files.get("backup_file")
+    if not file or not getattr(file, "filename", ""):
+        flash("Выберите JSON-файл для восстановления", "warning")
+        return redirect(url_for("admin.admin_backup_page"))
+
+    try:
+        payload = json.load(file)
+    except Exception:
+        flash("Не удалось прочитать JSON-файл", "danger")
+        return redirect(url_for("admin.admin_backup_page"))
+
+    required_keys = {"categories", "products", "batches", "write_offs", "sales"}
+    if not required_keys.issubset(set(payload.keys())):
+        flash("Неверный формат резервной копии", "danger")
+        return redirect(url_for("admin.admin_backup_page"))
+
+    try:
+        SaleItem.query.delete()
+        Sale.query.delete()
+        WriteOff.query.delete()
+        Batch.query.delete()
+        Product.query.delete()
+        Category.query.delete()
+
+        for c in payload["categories"]:
+            db.session.add(Category(id=c["id"], name=c["name"], image_url=c.get("image_url")))
+
+        for p in payload["products"]:
+            db.session.add(Product(
+                id=p["id"],
+                name=p["name"],
+                description=p.get("description"),
+                details=p.get("details"),
+                is_weight_based=bool(p.get("is_weight_based", False)),
+                price=Decimal(str(p["price"])),
+                is_frozen=bool(p.get("is_frozen", False)),
+                is_discounted=bool(p.get("is_discounted", False)),
+                supplier_name=p.get("supplier_name"),
+                image_url=p.get("image_url"),
+                tags=p.get("tags"),
+                shelf_life_days=int(p.get("shelf_life_days", 7)),
+                category_id=p.get("category_id"),
+            ))
+
+        for b in payload["batches"]:
+            db.session.add(Batch(
+                id=b["id"],
+                product_id=b["product_id"],
+                quantity=Decimal(str(b["quantity"])),
+                produced_at=date.fromisoformat(b["produced_at"]),
+                expires_at=date.fromisoformat(b["expires_at"]),
+            ))
+
+        for w in payload["write_offs"]:
+            db.session.add(WriteOff(
+                id=w["id"],
+                product_id=w["product_id"],
+                quantity=Decimal(str(w["quantity"])),
+                reason=w["reason"],
+            ))
+
+        for s in payload["sales"]:
+            sale = Sale(id=s["id"])
+            db.session.add(sale)
+            db.session.flush()
+
+            for i in s.get("items", []):
+                db.session.add(SaleItem(
+                    id=i["id"],
+                    sale_id=sale.id,
+                    product_id=i["product_id"],
+                    quantity=Decimal(str(i["quantity"])),
+                    unit_price=Decimal(str(i["unit_price"])),
+                    line_total=Decimal(str(i["line_total"])),
+                    source_produced_at=date.fromisoformat(i["source_produced_at"]) if i.get("source_produced_at") else None,
+                ))
+
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        flash("Ошибка восстановления. Проверьте корректность файла.", "danger")
+        return redirect(url_for("admin.admin_backup_page"))
+
+    flash("Резервная копия успешно восстановлена", "success")
+    return redirect(url_for("admin.dashboard"))
 
 
 # ---- Products CRUD ----
