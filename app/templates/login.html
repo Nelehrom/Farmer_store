@@ -1,27 +1,48 @@
-<!doctype html>
-<html lang="ru">
-<head><meta charset="UTF-8"><title>Вход</title></head>
-<body>
-{% with messages = get_flashed_messages(with_categories=true) %}
-  {% if messages %}
-    {% for category, message in messages %}
-      {% if loop.first %}
-        <div class="alert alert-{{ category }}">{{ message }}</div>
-      {% endif %}
-    {% endfor %}
-  {% endif %}
-{% endwith %}
-  <h2>Вход</h2>
-  <form method="POST">
-    {{ form.hidden_tag() }}
-    <p>{{ form.phone.label }}<br>{{ form.phone() }}
-{% for error in form.phone.errors %}
-  <span style="color: red;">[{{ error }}]</span>
-{% endfor %}
-</p>
-    <p>{{ form.password.label }}<br>{{ form.password() }}</p>
-    <p>{{ form.remember() }} {{ form.remember.label }}</p>
-    <p>{{ form.submit() }}</p>
-  </form>
-</body>
-</html>
+{% extends "base.html" %}
+
+{% block title %}Вход | Farmer Store{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center py-4 py-md-5">
+  <div class="col-12 col-sm-10 col-md-8 col-lg-5">
+    <div class="card border-0 shadow-lg rounded-4 overflow-hidden">
+      <div class="card-body p-4 p-md-5">
+        <h1 class="h3 fw-bold mb-2">С возвращением 👋</h1>
+        <p class="text-muted mb-4">Войдите в аккаунт, чтобы продолжить покупки.</p>
+
+        <form method="POST" novalidate>
+          {{ form.hidden_tag() }}
+
+          <div class="mb-3">
+            {{ form.phone.label(class="form-label fw-semibold") }}
+            {{ form.phone(class="form-control form-control-lg", placeholder="+7XXXXXXXXXX") }}
+            {% for error in form.phone.errors %}
+              <div class="text-danger small mt-1">{{ error }}</div>
+            {% endfor %}
+          </div>
+
+          <div class="mb-3">
+            {{ form.password.label(class="form-label fw-semibold") }}
+            {{ form.password(class="form-control form-control-lg", placeholder="Введите пароль") }}
+            {% for error in form.password.errors %}
+              <div class="text-danger small mt-1">{{ error }}</div>
+            {% endfor %}
+          </div>
+
+          <div class="form-check mb-4">
+            {{ form.remember(class="form-check-input") }}
+            {{ form.remember.label(class="form-check-label") }}
+          </div>
+
+          {{ form.submit(class="btn btn-success btn-lg w-100") }}
+        </form>
+
+        <p class="text-center text-muted mt-4 mb-0">
+          Нет аккаунта?
+          <a href="{{ url_for('main.register') }}" class="link-success link-underline-opacity-0 link-underline-opacity-75-hover">Зарегистрироваться</a>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
