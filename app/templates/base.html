@@ -30,6 +30,9 @@
 
       <div class="d-flex gap-2">
         {% if current_user.is_authenticated %}
+          {% if current_user.is_admin %}
+            <a class="btn btn-warning btn-sm" href="{{ url_for('admin.dashboard') }}">В админку</a>
+          {% endif %}
           <a class="btn btn-outline-light btn-sm" href="{{ url_for('main.profile') }}">Профиль</a>
           <a class="btn btn-danger btn-sm" href="{{ url_for('main.logout') }}">Выйти</a>
         {% else %}
