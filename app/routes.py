@@ -171,7 +171,16 @@ def logout():
 @main_bp.route("/profile")
 @login_required
 def profile():
-    return render_template("profile.html")
+    orders = (
+        Preorder.query
+        .filter_by(user_id=current_user.id)
+        .order_by(Preorder.created_at.desc(), Preorder.id.desc())
+        .all()
+    )
+    for order in orders:
+        for item in order.items:
+            item._qty_display = format_preorder_qty(item)
+    return render_template("profile.html", orders=orders)
 
 
 @main_bp.route("/favorites")
