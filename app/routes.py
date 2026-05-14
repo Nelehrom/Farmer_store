@@ -153,6 +153,8 @@ def login():
         if user and check_password_hash(user.password_hash, form.password.data):
             login_user(user, remember=form.remember.data)
             flash("Вы вошли в аккаунт!", "success")
+            if user.is_admin:
+                return redirect(url_for("admin.dashboard"))
             return redirect(url_for("main.profile"))
 
         flash("Неверный телефон или пароль", "danger")
