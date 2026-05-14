@@ -240,6 +240,7 @@
           <div class="d-flex align-items-center gap-2">
             <input type="number" class="form-control form-control-sm" style="width: 120px" min="${min}" step="${step}" value="${item.quantity}" data-preorder-qty data-product-id="${item.id}">
             <span class="small text-muted">${suffix}</span>
+            <button type="button" class="btn btn-sm btn-outline-danger" data-preorder-remove data-product-id="${item.id}">Удалить</button>
           </div>
         </div>
       </div>`;
@@ -347,6 +348,17 @@
     const preorderBtn = event.target.closest("[data-preorder-btn]");
     if (preorderBtn) {
       handlePreorderToggle(preorderBtn);
+      return;
+    }
+
+    const removePreorderBtn = event.target.closest("[data-preorder-remove]");
+    if (removePreorderBtn) {
+      const productId = Number(removePreorderBtn.dataset.productId);
+      if (!Number.isFinite(productId)) return;
+      const updated = removeById(getPreorders(), productId);
+      setPreorders(updated);
+      renderPreorders();
+      syncPreorderButtons();
     }
   });
 

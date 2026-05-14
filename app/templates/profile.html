@@ -3,12 +3,49 @@
 {% block title %}Профиль{% endblock %}
 
 {% block content %}
-<div class="card shadow-sm">
+<div class="card shadow-sm mb-4">
   <div class="card-body">
     <h2 class="h4">Профиль</h2>
     <p class="mb-2"><strong>Пользователь:</strong> {{ current_user.username }}</p>
-    <p class="mb-2"><strong>Телефон:</strong> {{ current_user.phone }}</p>
-    <p class="mb-0 text-muted">Здесь будут история заказов, сохранённые адреса и настройки.</p>
+    <p class="mb-0"><strong>Телефон:</strong> {{ current_user.phone }}</p>
   </div>
 </div>
+
+<h3 class="h5 mb-3">История заказов</h3>
+{% if orders %}
+  <div class="d-flex flex-column gap-3">
+    {% for order in orders %}
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start gap-3 mb-2">
+            <div>
+              <div class="fw-semibold">Заказ #{{ order.id }}</div>
+              <div class="small text-muted">Создан: {{ order.created_at.strftime('%d.%m.%Y %H:%M') }}</div>
+            </div>
+            <span class="badge {% if order.status == 'active' %}text-bg-primary{% elif order.status == 'completed' %}text-bg-success{% else %}text-bg-secondary{% endif %}">
+              {% if order.status == 'active' %}Активный{% elif order.status == 'completed' %}Выдан{% else %}Отменён{% endif %}
+            </span>
+          </div>
+
+          <div class="small mb-2">Дата получения: {{ order.pickup_date.strftime('%d.%m.%Y') }}{% if order.pickup_time %}, {{ order.pickup_time }}{% endif %}</div>
+
+          <ul class="mb-2">
+            {% for item in order.items %}
+              <li>{{ item.product.name }} — {{ item._qty_display if item._qty_display is defined else item.quantity }}</li>
+            {% endfor %}
+          </ul>
+
+          {% if order.comment %}
+            <div class="small mb-2">Комментарий: {{ order.comment }}</div>
+          {% endif %}
+          {% if order.cancel_reason %}
+            <div class="small text-danger mb-0">Причина отмены: {{ order.cancel_reason }}</div>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="alert alert-light border">У вас пока нет заказов.</div>
+{% endif %}
 {% endblock %}
